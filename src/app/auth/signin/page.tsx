@@ -32,7 +32,9 @@ export default function SignInPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm animate-fade-in">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-white tracking-tight">bookface</h1>
+          <Link href="/" className="inline-block text-2xl font-bold text-white tracking-tight hover:text-white/80 transition-colors">
+            bookface
+          </Link>
           <p className="text-white/40 mt-1 text-sm">Sign in to continue</p>
         </div>
 
