@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { INTEREST_TAGS } from '@/types';
 
 const TERMINAL_LINES = [
   '> initializing bookface...',
@@ -116,18 +115,6 @@ export default function LandingPage() {
           >
             Start matching →
           </button>
-
-          {/* Interest tags preview */}
-          <div className="flex flex-wrap justify-center gap-2">
-            {INTEREST_TAGS.slice(0, 12).map((tag) => (
-              <span
-                key={tag}
-                className="text-xs font-mono text-white/35 bg-white/[0.04] border border-white/[0.08] rounded-full px-3 py-1 hover:border-white/15 hover:text-white/60 transition-all cursor-default"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
 
           {/* Feature cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
