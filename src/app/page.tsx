@@ -14,6 +14,39 @@ const TERMINAL_LINES = [
   '> connection established ✓',
 ];
 
+function VideoIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 32 32" fill="none" stroke="white" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="opacity-80">
+      <rect x="2" y="8" width="20" height="16" rx="3.5"/>
+      <path d="M22 13l8-4v14l-8-4V13z"/>
+    </svg>
+  );
+}
+
+function DiceIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 32 32" fill="none" stroke="white" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="opacity-80">
+      <rect x="3" y="3" width="26" height="26" rx="5"/>
+      <circle cx="10" cy="10" r="1.5" fill="white" stroke="none"/>
+      <circle cx="22" cy="10" r="1.5" fill="white" stroke="none"/>
+      <circle cx="10" cy="22" r="1.5" fill="white" stroke="none"/>
+      <circle cx="22" cy="22" r="1.5" fill="white" stroke="none"/>
+      <circle cx="16" cy="16" r="1.5" fill="white" stroke="none"/>
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 32 32" fill="none" stroke="white" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="opacity-80">
+      <rect x="6" y="14" width="20" height="14" rx="4"/>
+      <path d="M10 14v-4a6 6 0 0 1 12 0v4"/>
+      <circle cx="16" cy="21" r="1.5" fill="white" stroke="none"/>
+      <line x1="16" y1="21" x2="16" y2="24" strokeWidth="2"/>
+    </svg>
+  );
+}
+
 export default function LandingPage() {
   const { data: session } = useSession();
   const router = useRouter();
@@ -48,7 +81,7 @@ export default function LandingPage() {
     <div className="min-h-screen flex flex-col">
       {/* Nav */}
       <nav className="flex items-center justify-between px-5 py-3 glass border-b border-white/[0.08]">
-        <span className="text-base font-bold text-white tracking-tight">bookface</span>
+        <span className="text-base font-bold tracking-tight text-white">book<span className="text-green">face</span></span>
         <div className="flex items-center gap-2">
           {session ? (
             <>
@@ -119,12 +152,12 @@ export default function LandingPage() {
           {/* Feature cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
             {[
-              { icon: '📹', title: 'Video first', desc: 'Real camera, real audio, real vibes' },
-              { icon: '🎲', title: 'Random match', desc: 'Next available dev, or filter by stack' },
-              { icon: '🔒', title: 'Anonymous', desc: 'Identity only revealed when you both agree' },
+              { icon: <VideoIcon />, title: 'Video first', desc: 'Real camera, real audio, real vibes' },
+              { icon: <DiceIcon />, title: 'Random match', desc: 'Next available dev, or filter by stack' },
+              { icon: <LockIcon />, title: 'Anonymous', desc: 'Identity only revealed when you both agree' },
             ].map((f) => (
-              <div key={f.title} className="glass rounded-2xl p-5 text-left hover:bg-white/[0.09] transition-all">
-                <div className="text-2xl mb-3">{f.icon}</div>
+              <div key={f.title} className="glass rounded-2xl p-5 text-center hover:bg-white/[0.09] transition-all">
+                <div className="flex justify-center mb-3">{f.icon}</div>
                 <div className="font-semibold text-sm text-white mb-1">{f.title}</div>
                 <div className="text-xs text-white/40 leading-relaxed">{f.desc}</div>
               </div>

@@ -69,8 +69,8 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
     <div className="h-screen flex flex-col overflow-hidden">
       {/* Header — glass menu bar */}
       <header className="flex items-center justify-between px-5 py-3 glass border-b border-white/[0.08] shrink-0 z-10">
-        <Link href="/" className="text-base font-bold text-white tracking-tight">
-          bookface
+        <Link href="/" className="text-base font-bold tracking-tight text-white hover:opacity-80 transition-opacity">
+          book<span className="text-green">face</span>
         </Link>
         <div className="flex items-center gap-3">
           {handle && (

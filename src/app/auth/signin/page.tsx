@@ -32,8 +32,8 @@ export default function SignInPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm animate-fade-in">
         <div className="mb-8 text-center">
-          <Link href="/" className="inline-block text-2xl font-bold text-white tracking-tight hover:text-white/80 transition-colors">
-            bookface
+          <Link href="/" className="inline-block text-2xl font-bold tracking-tight text-white hover:opacity-80 transition-opacity">
+            book<span className="text-green">face</span>
           </Link>
           <p className="text-white/40 mt-1 text-sm">Sign in to continue</p>
         </div>
@@ -65,19 +65,29 @@ export default function SignInPage() {
               required
               className="w-full bg-white/[0.06] border border-white/[0.1] rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-green/60 transition-all"
             />
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full bg-white/[0.06] border border-white/[0.1] rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-green/60 transition-all"
-            />
+            <div className="space-y-1">
+              <input
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full bg-white/[0.06] border border-white/[0.1] rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-green/60 transition-all"
+              />
+              <div className="flex justify-end px-1">
+                <Link
+                  href="/auth/forgot-password"
+                  className="text-xs text-white/35 hover:text-white/70 transition-colors"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            </div>
             {error && <p className="text-danger text-xs px-1">{error}</p>}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-green text-white font-semibold rounded-2xl px-4 py-3 text-sm hover:bg-green-dim transition-all disabled:opacity-50 shadow-green-glow mt-1"
+              className="w-full bg-green text-white font-semibold rounded-2xl px-4 py-3 text-sm hover:bg-green-dim transition-all disabled:opacity-50 shadow-green-glow"
             >
               {loading ? 'Signing in…' : 'Sign in'}
             </button>

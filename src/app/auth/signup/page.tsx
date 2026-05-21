@@ -1,20 +1,37 @@
 'use client';
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+function validate(password: string) {
+  return {
+    length:    password.length >= 8,
+    uppercase: /[A-Z]/.test(password),
+    special:   /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+  };
+}
+
 export default function SignUpPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [email, setEmail]           = useState('');
+  const [password, setPassword]     = useState('');
+  const [confirm, setConfirm]       = useState('');
+  const [error, setError]           = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [touched, setTouched]       = useState(false);
+
+  const rules = validate(password);
+  const allRulesPass = rules.length && rules.uppercase && rules.special;
+  const passwordsMatch = password === confirm;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setTouched(true);
+    if (!allRulesPass) return;
+    if (!passwordsMatch) { setError('Passwords do not match'); return; }
+
     setLoading(true);
     setError('');
+
     const res = await fetch('/api/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -34,11 +51,11 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm animate-fade-in">
         <div className="mb-8 text-center">
-          <Link href="/" className="inline-block text-2xl font-bold text-white tracking-tight hover:text-white/80 transition-colors">
-            bookface
+          <Link href="/" className="inline-block text-2xl font-bold tracking-tight text-white hover:opacity-80 transition-opacity">
+            book<span className="text-green">face</span>
           </Link>
           <p className="text-white/40 mt-1 text-sm">Create your account</p>
         </div>
@@ -68,20 +85,47 @@ export default function SignUpPage() {
               required
               className="w-full bg-white/[0.06] border border-white/[0.1] rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-green/60 transition-all"
             />
+
             <input
               type="password"
-              placeholder="Password (8+ characters)"
+              placeholder="Password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => { setPassword(e.target.value); setTouched(true); }}
               required
-              minLength={8}
-              className="w-full bg-white/[0.06] border border-white/[0.1] rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-green/60 transition-all"
+              className={`w-full bg-white/[0.06] border rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none transition-all ${
+                touched && !allRulesPass ? 'border-danger/50 focus:border-danger/80' : 'border-white/[0.1] focus:border-green/60'
+              }`}
             />
+
+            {/* Password requirements */}
+            {touched && (
+              <div className="grid grid-cols-3 gap-1.5 px-1">
+                <Req met={rules.length}    label="8+ chars" />
+                <Req met={rules.uppercase} label="Uppercase" />
+                <Req met={rules.special}   label="Special char" />
+              </div>
+            )}
+
+            <input
+              type="password"
+              placeholder="Confirm password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              required
+              className={`w-full bg-white/[0.06] border rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none transition-all ${
+                confirm && !passwordsMatch ? 'border-danger/50 focus:border-danger/80' : 'border-white/[0.1] focus:border-green/60'
+              }`}
+            />
+            {confirm && !passwordsMatch && (
+              <p className="text-danger text-xs px-1">Passwords don't match</p>
+            )}
+
             {error && <p className="text-danger text-xs px-1">{error}</p>}
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-green text-white font-semibold rounded-2xl px-4 py-3 text-sm hover:bg-green-dim transition-all disabled:opacity-50 shadow-green-glow mt-1"
+              className="w-full bg-green text-white font-semibold rounded-2xl px-4 py-3 text-sm hover:bg-green-dim transition-all disabled:opacity-50 shadow-green-glow"
             >
               {loading ? 'Creating account…' : 'Create account'}
             </button>
@@ -95,6 +139,20 @@ export default function SignUpPage() {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Req({ met, label }: { met: boolean; label: string }) {
+  return (
+    <div className={`flex items-center gap-1 text-[11px] transition-colors ${met ? 'text-green' : 'text-white/30'}`}>
+      <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        {met
+          ? <polyline points="20 6 9 17 4 12" />
+          : <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>
+        }
+      </svg>
+      {label}
     </div>
   );
 }
