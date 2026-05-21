@@ -25,7 +25,7 @@ export async function GET() {
 
   return NextResponse.json({
     ...user,
-    tags: JSON.parse(user.tags),
+    tags: user.tags,
     isGithubLinked: user.accounts.some((a) => a.provider === 'github'),
   });
 }
@@ -60,7 +60,7 @@ export async function PUT(req: NextRequest) {
       githubUrl: githubUrl || null,
       twitterUrl: twitterUrl || null,
       contactEmail: contactEmail || null,
-      tags: JSON.stringify(tags ?? []),
+      tags: tags ?? [],
     },
   });
 

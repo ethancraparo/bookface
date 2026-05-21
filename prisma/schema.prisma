@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -15,7 +15,7 @@ model User {
   githubUrl     String?
   twitterUrl    String?
   contactEmail  String?
-  tags          String    @default("[]")
+  tags          String[]  @default([])
   password      String?
   strikes       Int       @default(0)
   isBanned      Boolean   @default(false)
