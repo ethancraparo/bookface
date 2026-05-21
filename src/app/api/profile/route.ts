@@ -13,10 +13,16 @@ export async function GET() {
     where: { id: session.user.id },
     select: {
       handle: true,
+      bio: true,
       githubUrl: true,
       twitterUrl: true,
       contactEmail: true,
       tags: true,
+      revealHandle: true,
+      revealBio: true,
+      revealGithub: true,
+      revealTwitter: true,
+      revealEmail: true,
       accounts: { select: { provider: true } },
     },
   });
@@ -25,7 +31,6 @@ export async function GET() {
 
   return NextResponse.json({
     ...user,
-    tags: user.tags,
     isGithubLinked: user.accounts.some((a) => a.provider === 'github'),
   });
 }
@@ -36,7 +41,10 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { handle, githubUrl, twitterUrl, contactEmail, tags } = await req.json();
+  const {
+    handle, bio, githubUrl, twitterUrl, contactEmail, tags,
+    revealHandle, revealBio, revealGithub, revealTwitter, revealEmail,
+  } = await req.json();
 
   if (!handle || handle.length < 2 || handle.length > 30) {
     return NextResponse.json({ error: 'Handle must be 2–30 characters' }, { status: 400 });
@@ -45,7 +53,6 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Handle can only contain letters, numbers, and underscores' }, { status: 400 });
   }
 
-  // Check handle uniqueness (exclude current user)
   const taken = await prisma.user.findFirst({
     where: { handle, NOT: { id: session.user.id } },
   });
@@ -57,10 +64,16 @@ export async function PUT(req: NextRequest) {
     where: { id: session.user.id },
     data: {
       handle,
+      bio: bio || null,
       githubUrl: githubUrl || null,
       twitterUrl: twitterUrl || null,
       contactEmail: contactEmail || null,
       tags: tags ?? [],
+      revealHandle: revealHandle ?? true,
+      revealBio: revealBio ?? true,
+      revealGithub: revealGithub ?? true,
+      revealTwitter: revealTwitter ?? true,
+      revealEmail: revealEmail ?? true,
     },
   });
 

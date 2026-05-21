@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useMatch } from '@/hooks/useMatch';
@@ -72,7 +72,7 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
         <Link href="/" className="text-base font-bold tracking-tight text-white hover:opacity-80 transition-opacity">
           book<span className="text-green">face</span>
         </Link>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {handle && (
             <span className="text-sm text-white/40 font-mono">@{handle}</span>
           )}
@@ -86,6 +86,15 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
               <circle cx="12" cy="7" r="4"/>
             </svg>
           </Link>
+          <button
+            onClick={() => signOut({ callbackUrl: '/' })}
+            title="Sign out"
+            className="w-8 h-8 rounded-full glass flex items-center justify-center text-white/30 hover:text-danger transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
         </div>
       </header>
 

@@ -1,0 +1,7 @@
+-- Add bio and reveal preference fields to User
+ALTER TABLE "User" ADD COLUMN "bio" TEXT;
+ALTER TABLE "User" ADD COLUMN "revealHandle" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "User" ADD COLUMN "revealBio" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "User" ADD COLUMN "revealGithub" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "User" ADD COLUMN "revealTwitter" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "User" ADD COLUMN "revealEmail" BOOLEAN NOT NULL DEFAULT true;

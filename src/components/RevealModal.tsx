@@ -41,7 +41,7 @@ function IncomingReveal({ onAccept, onDecline }: { onAccept: () => void; onDecli
       <div>
         <h3 className="font-semibold text-white text-[17px]">They want to connect</h3>
         <p className="text-white/50 text-sm mt-1.5 leading-relaxed">
-          Reveal your identity? Both of you will see each other's handle, GitHub, Twitter, and contact email.
+          Reveal your identity? You'll each share whatever info you've chosen in your profile settings.
         </p>
       </div>
       <div className="flex gap-2.5 pt-1">
@@ -91,6 +91,15 @@ function IdentityReveal({ identity, onClose }: { identity: RevealedIdentity; onC
         {identity.handle && (
           <Row icon="@" label="Handle" value={`@${identity.handle}`} />
         )}
+        {identity.bio && (
+          <div className="flex gap-3">
+            <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center text-white/40 text-xs shrink-0">✦</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] text-white/35 uppercase tracking-wide font-medium">Bio</div>
+              <div className="text-sm text-white/80 leading-relaxed">{identity.bio}</div>
+            </div>
+          </div>
+        )}
         {identity.githubUrl && (
           <Row
             icon={<GithubIcon />}
@@ -105,6 +114,9 @@ function IdentityReveal({ identity, onClose }: { identity: RevealedIdentity; onC
         )}
         {identity.contactEmail && (
           <Row icon="✉" label="Email" value={identity.contactEmail} href={`mailto:${identity.contactEmail}`} />
+        )}
+        {!identity.handle && !identity.bio && !identity.githubUrl && !identity.twitterUrl && !identity.contactEmail && (
+          <p className="text-white/30 text-sm text-center py-2">They chose not to share any details.</p>
         )}
       </div>
 

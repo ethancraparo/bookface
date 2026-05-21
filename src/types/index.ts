@@ -19,6 +19,7 @@ export interface ChatMessage {
 
 export interface RevealedIdentity {
   handle: string | null;
+  bio: string | null;
   githubUrl: string | null;
   twitterUrl: string | null;
   contactEmail: string | null;

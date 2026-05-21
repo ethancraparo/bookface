@@ -194,9 +194,15 @@ app.prepare().then(() => {
           where: { id: currentUserId },
           select: {
             handle: true,
+            bio: true,
             githubUrl: true,
             twitterUrl: true,
             contactEmail: true,
+            revealHandle: true,
+            revealBio: true,
+            revealGithub: true,
+            revealTwitter: true,
+            revealEmail: true,
             accounts: { select: { provider: true } },
           },
         }),
@@ -204,9 +210,15 @@ app.prepare().then(() => {
           where: { id: session.partnerUserId },
           select: {
             handle: true,
+            bio: true,
             githubUrl: true,
             twitterUrl: true,
             contactEmail: true,
+            revealHandle: true,
+            revealBio: true,
+            revealGithub: true,
+            revealTwitter: true,
+            revealEmail: true,
             accounts: { select: { provider: true } },
           },
         }),
@@ -215,10 +227,11 @@ app.prepare().then(() => {
       if (!myProfile || !partnerProfile) return;
 
       const fmt = (p: typeof myProfile) => ({
-        handle: p.handle,
-        githubUrl: p.githubUrl,
-        twitterUrl: p.twitterUrl,
-        contactEmail: p.contactEmail,
+        handle:       p.revealHandle  ? p.handle       : null,
+        bio:          p.revealBio     ? p.bio          : null,
+        githubUrl:    p.revealGithub  ? p.githubUrl    : null,
+        twitterUrl:   p.revealTwitter ? p.twitterUrl   : null,
+        contactEmail: p.revealEmail   ? p.contactEmail : null,
         isVerifiedDev: p.accounts.some((a) => a.provider === 'github'),
       });
 

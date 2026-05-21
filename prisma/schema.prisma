@@ -19,6 +19,12 @@ model User {
   password           String?
   resetToken         String?   @unique
   resetTokenExpiry   DateTime?
+  bio                String?
+  revealHandle       Boolean   @default(true)
+  revealBio          Boolean   @default(true)
+  revealGithub       Boolean   @default(true)
+  revealTwitter      Boolean   @default(true)
+  revealEmail        Boolean   @default(true)
   strikes       Int       @default(0)
   isBanned      Boolean   @default(false)
   bannedUntil   DateTime?
