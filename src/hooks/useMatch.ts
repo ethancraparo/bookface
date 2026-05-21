@@ -274,6 +274,8 @@ export function useMatch({ userId }: UseMatchOptions) {
     setIsVideoOff((v) => !v);
   }, []);
 
+  const clearError = useCallback(() => setErrorMsg(null), []);
+
   return {
     // State
     sessionState,
@@ -300,5 +302,6 @@ export function useMatch({ userId }: UseMatchOptions) {
     toggleVideo,
     setShowReport,
     setSelectedTags,
+    clearError,
   };
 }

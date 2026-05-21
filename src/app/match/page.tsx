@@ -56,6 +56,7 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
     toggleVideo,
     setShowReport,
     setSelectedTags,
+    clearError,
   } = useMatch({ userId });
 
   const isActive = sessionState === 'active' || sessionState === 'connecting';
@@ -84,8 +85,22 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
 
       {/* Error banner */}
       {errorMsg && (
-        <div className="bg-danger/10 border-b border-danger/30 px-4 py-2 text-sm text-danger font-mono shrink-0">
-          {errorMsg}
+        <div className="bg-danger/10 border-b border-danger/30 px-4 py-2 text-sm text-danger font-mono shrink-0 flex items-center justify-between gap-4">
+          <span>{errorMsg}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => { clearError(); startMatching(selectedTags); }}
+              className="text-xs border border-danger/40 rounded px-2 py-0.5 hover:bg-danger/20 transition-colors"
+            >
+              retry
+            </button>
+            <button
+              onClick={clearError}
+              className="text-xs text-danger/60 hover:text-danger transition-colors"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 
