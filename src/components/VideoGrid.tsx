@@ -23,6 +23,7 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
 
   const [sizeIdx, setSizeIdx] = useState(0);
   const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null);
+  const [remoteIsWide, setRemoteIsWide] = useState(false);
   const isDragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
   const didDrag = useRef(false);
@@ -35,7 +36,20 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
   }, [localStream]);
 
   useEffect(() => {
-    if (remoteRef.current && remoteStream) remoteRef.current.srcObject = remoteStream;
+    if (!remoteRef.current || !remoteStream) return;
+    remoteRef.current.srcObject = remoteStream;
+    const vid = remoteRef.current;
+    const onMeta = () => {
+      if (vid.videoWidth && vid.videoHeight) {
+        setRemoteIsWide(vid.videoWidth / vid.videoHeight > 1.9);
+      }
+    };
+    vid.addEventListener('loadedmetadata', onMeta);
+    // also re-check when tracks change mid-session (screen share start/stop)
+    remoteStream.getVideoTracks().forEach((t) => {
+      t.addEventListener('ended', () => setRemoteIsWide(false));
+    });
+    return () => vid.removeEventListener('loadedmetadata', onMeta);
   }, [remoteStream]);
 
   // Clamp position when size changes
@@ -87,7 +101,12 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
     <div ref={containerRef} className="relative flex-1 bg-black rounded-xl overflow-hidden select-none">
       {/* Remote video */}
       {remoteStream ? (
-        <video ref={remoteRef} autoPlay playsInline className="w-full h-full object-cover" />
+        <video
+          ref={remoteRef}
+          autoPlay
+          playsInline
+          className={`w-full h-full ${remoteIsWide ? 'object-contain bg-black' : 'object-cover'}`}
+        />
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-elevated">
           <div className="text-center">
