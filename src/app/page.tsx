@@ -48,8 +48,8 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Nav */}
-      <nav className="flex items-center justify-between px-6 py-4 glass border-b border-white/[0.08]">
-        <span className="text-lg font-bold text-white tracking-tight">bookface</span>
+      <nav className="flex items-center justify-between px-5 py-3 glass border-b border-white/[0.08]">
+        <span className="text-base font-bold text-white tracking-tight">bookface</span>
         <div className="flex items-center gap-2">
           {session ? (
             <>
