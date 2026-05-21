@@ -108,12 +108,12 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
           className={`w-full h-full ${remoteIsWide ? 'object-contain bg-black' : 'object-cover'}`}
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center bg-elevated">
-          <div className="text-center">
-            <div className="w-16 h-16 rounded-full bg-surface border border-border mx-auto mb-3 flex items-center justify-center">
-              <span className="text-2xl">👤</span>
+        <div className="w-full h-full flex items-center justify-center bg-black">
+          <div className="text-center space-y-3">
+            <div className="w-16 h-16 rounded-full glass mx-auto flex items-center justify-center text-2xl">
+              👤
             </div>
-            <p className="text-text-muted text-sm font-mono">connecting...</p>
+            <p className="text-white/30 text-sm">Connecting…</p>
           </div>
         </div>
       )}
@@ -122,7 +122,7 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
       <div
         onMouseDown={handlePipMouseDown}
         style={pipStyle}
-        className="absolute rounded-lg overflow-hidden border-2 border-border shadow-xl bg-surface cursor-grab active:cursor-grabbing group"
+        className="absolute rounded-2xl overflow-hidden border border-white/20 shadow-glass bg-black cursor-grab active:cursor-grabbing group"
       >
         <video
           ref={localRef}

@@ -10,47 +10,88 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        base: '#0a0a0f',
-        surface: '#111118',
-        elevated: '#1a1a24',
-        border: '#2a2a3a',
-        'text-primary': '#e8e8f0',
-        'text-muted': '#6b7280',
-        'text-dim': '#3d3d50',
+        // Base backgrounds
+        base:     '#070710',
+        surface:  '#0f0f1a',
+        elevated: '#161625',
+        // Borders
+        border: '#ffffff1f',        // white/12
+        // Text
+        'text-primary':   '#f5f5f7',
+        'text-muted':     '#98989f',
+        'text-dim':       '#48484a',
+        // Accents — Apple system palette
         green: {
-          DEFAULT: '#22c55e',
-          dim: '#16a34a',
-          glow: '#22c55e33',
+          DEFAULT: '#30d158',
+          dim:     '#25a244',
+          glow:    '#30d15820',
+        },
+        blue: {
+          DEFAULT: '#0a84ff',
+          dim:     '#0070e0',
+          glow:    '#0a84ff20',
         },
         cyan: {
-          DEFAULT: '#22d3ee',
-          dim: '#0891b2',
+          DEFAULT: '#32ade6',
+          dim:     '#1e8cbf',
         },
-        danger: '#ef4444',
+        purple: {
+          DEFAULT: '#bf5af2',
+          dim:     '#9d3ed4',
+        },
+        danger: '#ff453a',
+        yellow: {
+          DEFAULT: '#ffd60a',
+          500: '#ffd60a',
+        },
       },
       fontFamily: {
-        sans: ['var(--font-geist-sans)', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-geist-mono)', 'monospace'],
+        sans: ['var(--font-geist-sans)', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-geist-mono)', '"SF Mono"', 'ui-monospace', 'monospace'],
+      },
+      borderRadius: {
+        '4xl': '2rem',
+        '5xl': '2.5rem',
+      },
+      backdropBlur: {
+        xs: '4px',
       },
       animation: {
-        blink: 'blink 1s step-end infinite',
+        blink:        'blink 1s step-end infinite',
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'fade-in': 'fadeIn 0.3s ease-in-out',
-        'slide-up': 'slideUp 0.3s ease-out',
+        'fade-in':    'fadeIn 0.25s ease-out',
+        'slide-up':   'slideUp 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'scale-in':   'scaleIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        spin:         'spin 1.2s linear infinite',
+        'glow-pulse': 'glowPulse 2s ease-in-out infinite',
       },
       keyframes: {
         blink: {
           '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0' },
+          '50%':       { opacity: '0' },
         },
         fadeIn: {
           from: { opacity: '0' },
-          to: { opacity: '1' },
+          to:   { opacity: '1' },
         },
         slideUp: {
-          from: { opacity: '0', transform: 'translateY(8px)' },
-          to: { opacity: '1', transform: 'translateY(0)' },
+          from: { opacity: '0', transform: 'translateY(12px) scale(0.97)' },
+          to:   { opacity: '1', transform: 'translateY(0)   scale(1)' },
         },
+        scaleIn: {
+          from: { opacity: '0', transform: 'scale(0.92)' },
+          to:   { opacity: '1', transform: 'scale(1)' },
+        },
+        glowPulse: {
+          '0%, 100%': { opacity: '0.6' },
+          '50%':       { opacity: '1' },
+        },
+      },
+      boxShadow: {
+        'glass':      '0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)',
+        'glass-lg':   '0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.10)',
+        'green-glow': '0 0 30px rgba(48,209,88,0.25)',
+        'blue-glow':  '0 0 30px rgba(10,132,255,0.25)',
       },
     },
   },

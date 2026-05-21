@@ -15,21 +15,17 @@ export default function SignUpPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
-
     const res = await fetch('/api/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
     const data = await res.json();
-
     if (!res.ok) {
       setError(data.error ?? 'Something went wrong');
       setLoading(false);
       return;
     }
-
-    // Auto sign in after signup
     await signIn('credentials', { email, password, callbackUrl: '/profile' });
   }
 
@@ -39,16 +35,16 @@ export default function SignUpPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm animate-fade-in">
         <div className="mb-8 text-center">
-          <span className="font-mono text-2xl font-bold text-green">bookface</span>
-          <p className="text-text-muted mt-1 text-sm">create your account</p>
+          <h1 className="text-2xl font-bold text-white tracking-tight">bookface</h1>
+          <p className="text-white/40 mt-1 text-sm">Create your account</p>
         </div>
 
-        <div className="bg-surface border border-border rounded-xl p-6 space-y-4">
+        <div className="glass rounded-3xl p-6 shadow-glass-lg space-y-4">
           <button
             onClick={handleGitHub}
-            className="w-full flex items-center justify-center gap-2 bg-elevated hover:bg-border border border-border rounded-lg px-4 py-2.5 text-sm font-medium transition-colors"
+            className="w-full flex items-center justify-center gap-2.5 bg-white/[0.08] hover:bg-white/[0.12] border border-white/[0.1] rounded-2xl px-4 py-3 text-sm font-medium text-white transition-all"
           >
             <GithubIcon />
             Sign up with GitHub
@@ -56,43 +52,43 @@ export default function SignUpPage() {
           </button>
 
           <div className="flex items-center gap-3">
-            <div className="flex-1 border-t border-border" />
-            <span className="text-text-dim text-xs font-mono">or</span>
-            <div className="flex-1 border-t border-border" />
+            <div className="flex-1 border-t border-white/[0.08]" />
+            <span className="text-white/25 text-xs">or</span>
+            <div className="flex-1 border-t border-white/[0.08]" />
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3">
+          <form onSubmit={handleSubmit} className="space-y-2.5">
             <input
               type="email"
-              placeholder="email"
+              placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full bg-elevated border border-border rounded-lg px-3 py-2.5 text-sm placeholder:text-text-dim focus:outline-none focus:border-green transition-colors"
+              className="w-full bg-white/[0.06] border border-white/[0.1] rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-green/60 transition-all"
             />
             <input
               type="password"
-              placeholder="password (8+ characters)"
+              placeholder="Password (8+ characters)"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
-              className="w-full bg-elevated border border-border rounded-lg px-3 py-2.5 text-sm placeholder:text-text-dim focus:outline-none focus:border-green transition-colors"
+              className="w-full bg-white/[0.06] border border-white/[0.1] rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-green/60 transition-all"
             />
-            {error && <p className="text-danger text-xs font-mono">{error}</p>}
+            {error && <p className="text-danger text-xs px-1">{error}</p>}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-green text-base font-semibold rounded-lg px-4 py-2.5 text-sm hover:bg-green-dim transition-colors disabled:opacity-50"
+              className="w-full bg-green text-white font-semibold rounded-2xl px-4 py-3 text-sm hover:bg-green-dim transition-all disabled:opacity-50 shadow-green-glow mt-1"
             >
-              {loading ? 'creating account...' : 'create account'}
+              {loading ? 'Creating account…' : 'Create account'}
             </button>
           </form>
 
-          <p className="text-center text-text-muted text-xs">
-            already have an account?{' '}
+          <p className="text-center text-white/35 text-xs pt-1">
+            Already have an account?{' '}
             <Link href="/auth/signin" className="text-green hover:underline">
-              sign in
+              Sign in
             </Link>
           </p>
         </div>

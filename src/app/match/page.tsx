@@ -23,7 +23,7 @@ export default function MatchPage() {
   if (status === 'loading' || !session?.user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <span className="font-mono text-text-muted animate-pulse">loading...</span>
+        <div className="w-6 h-6 rounded-full border-2 border-green border-t-transparent animate-spin" />
       </div>
     );
   }
@@ -33,36 +33,17 @@ export default function MatchPage() {
 
 function MatchPageInner({ userId, handle }: { userId: string; handle?: string }) {
   const {
-    sessionState,
-    localStream,
-    remoteStream,
-    isAudioMuted,
-    isVideoOff,
-    messages,
-    incomingReveal,
-    revealPending,
-    revealedIdentity,
-    showReport,
-    errorMsg,
-    selectedTags,
-    startMatching,
-    skip,
-    stopMatching,
-    sendMessage,
-    requestReveal,
-    respondToReveal,
-    reportUser,
-    toggleMute,
-    toggleVideo,
-    toggleScreenShare,
-    isScreenSharing,
-    setShowReport,
-    setSelectedTags,
-    clearError,
-    dismissReveal,
+    sessionState, localStream, remoteStream,
+    isAudioMuted, isVideoOff, isScreenSharing,
+    messages, incomingReveal, revealPending, revealedIdentity,
+    showReport, errorMsg, selectedTags,
+    startMatching, skip, stopMatching, sendMessage,
+    requestReveal, respondToReveal, reportUser,
+    toggleMute, toggleVideo, toggleScreenShare,
+    setShowReport, setSelectedTags, clearError, dismissReveal,
   } = useMatch({ userId });
 
-  const [splitPercent, setSplitPercent] = useState(40);
+  const [splitPercent, setSplitPercent] = useState(42);
   const isDividerDragging = useRef(false);
   const splitContainerRef = useRef<HTMLDivElement>(null);
 
@@ -71,7 +52,7 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
       if (!isDividerDragging.current || !splitContainerRef.current) return;
       const rect = splitContainerRef.current.getBoundingClientRect();
       const pct = ((e.clientX - rect.left) / rect.width) * 100;
-      setSplitPercent(Math.max(20, Math.min(80, pct)));
+      setSplitPercent(Math.max(22, Math.min(78, pct)));
     }
     function onMouseUp() { isDividerDragging.current = false; }
     window.addEventListener('mousemove', onMouseMove);
@@ -85,99 +66,91 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
   const isActive = sessionState === 'active' || sessionState === 'connecting';
 
   return (
-    <div className="h-screen flex flex-col bg-base overflow-hidden">
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-surface shrink-0">
-        <Link href="/" className="font-mono text-base font-bold text-green">
+    <div className="h-screen flex flex-col overflow-hidden">
+      {/* Header — glass menu bar */}
+      <header className="flex items-center justify-between px-5 py-3 glass border-b border-white/[0.08] shrink-0 z-10">
+        <Link href="/" className="text-base font-bold text-white tracking-tight">
           bookface
         </Link>
         <div className="flex items-center gap-3">
           {handle && (
-            <span className="text-xs font-mono text-text-muted">
-              @{handle}
-            </span>
+            <span className="text-sm text-white/40 font-mono">@{handle}</span>
           )}
           <Link
             href="/profile"
-            className="text-xs text-text-muted hover:text-text-primary transition-colors"
+            className="w-8 h-8 rounded-full glass flex items-center justify-center text-white/50 hover:text-white transition-colors"
+            title="Profile"
           >
-            ⚙ profile
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
           </Link>
         </div>
       </header>
 
       {/* Error banner */}
       {errorMsg && (
-        <div className="bg-danger/10 border-b border-danger/30 px-4 py-2 text-sm text-danger font-mono shrink-0 flex items-center justify-between gap-4">
+        <div className="bg-danger/10 border-b border-danger/20 px-5 py-2.5 text-sm text-danger shrink-0 flex items-center justify-between gap-4">
           <span>{errorMsg}</span>
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => { clearError(); startMatching(selectedTags); }}
-              className="text-xs border border-danger/40 rounded px-2 py-0.5 hover:bg-danger/20 transition-colors"
+              className="text-xs border border-danger/40 rounded-lg px-2.5 py-1 hover:bg-danger/15 transition-colors"
             >
-              retry
+              Retry
             </button>
-            <button
-              onClick={clearError}
-              className="text-xs text-danger/60 hover:text-danger transition-colors"
-            >
-              ✕
-            </button>
+            <button onClick={clearError} className="text-xs text-danger/60 hover:text-danger transition-colors">✕</button>
           </div>
         </div>
       )}
 
       {/* Main content */}
       <div className="flex-1 overflow-hidden flex flex-col">
-        {/* Idle: setup screen */}
+
+        {/* ── Idle ── */}
         {sessionState === 'idle' && (
           <div className="flex-1 flex flex-col items-center justify-center gap-8 p-8">
-            <div className="text-center">
-              <h2 className="font-mono text-xl font-bold text-text-primary">
-                ready to match?
-              </h2>
-              <p className="text-text-muted text-sm mt-1">
-                pick tags to find your kind of vibe coder, or go random
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl font-bold text-white tracking-tight">Ready to match?</h2>
+              <p className="text-white/50 text-[15px]">
+                Pick tags to find your kind of coder, or go random
               </p>
             </div>
 
-            <div className="w-full max-w-lg bg-surface border border-border rounded-xl p-5 space-y-4">
+            <div className="w-full max-w-md glass rounded-3xl p-6 shadow-glass space-y-5">
               <div>
-                <p className="text-xs font-mono text-text-muted mb-2">
-                  interest tags{' '}
-                  <span className="text-text-dim">(optional)</span>
+                <p className="text-sm font-medium text-white/60 mb-3">
+                  Interest tags <span className="text-white/30 font-normal">(optional)</span>
                 </p>
                 <TagSelector selected={selectedTags} onChange={setSelectedTags} />
               </div>
-
               <button
                 onClick={() => startMatching(selectedTags)}
-                className="w-full bg-green text-base font-bold rounded-xl py-3 text-base hover:bg-green-dim transition-all hover:scale-[1.01] active:scale-[0.99] shadow-[0_0_30px_#22c55e22]"
+                className="w-full bg-green text-white font-semibold rounded-2xl py-3.5 text-[15px] hover:bg-green-dim transition-all hover:scale-[1.01] active:scale-[0.99] shadow-green-glow"
               >
-                find a match →
+                Find a match →
               </button>
             </div>
 
             {!handle && (
-              <p className="text-xs text-text-muted font-mono">
-                <Link href="/profile" className="text-cyan hover:underline">
-                  set up your profile
-                </Link>{' '}
-                so you're ready when you connect
+              <p className="text-sm text-white/30">
+                <Link href="/profile" className="text-green hover:underline">Set up your profile</Link>
+                {' '}so you're ready when you connect
               </p>
             )}
           </div>
         )}
 
-        {/* Waiting */}
+        {/* ── Waiting ── */}
         {sessionState === 'waiting' && (
           <WaitingScreen onCancel={stopMatching} selectedTags={selectedTags} />
         )}
 
-        {/* Active / connecting */}
+        {/* ── Active / connecting ── */}
         {isActive && (
           <div ref={splitContainerRef} className="flex-1 flex overflow-hidden">
-            {/* Video area */}
+            {/* Video column */}
             <div style={{ width: `${splitPercent}%` }} className="flex flex-col p-3 gap-3 min-w-0 shrink-0">
               <VideoGrid
                 localStream={localStream}
@@ -205,37 +178,39 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
             {/* Resizable divider */}
             <div
               onMouseDown={() => { isDividerDragging.current = true; }}
-              className="w-1 shrink-0 bg-border hover:bg-cyan/50 cursor-col-resize transition-colors select-none"
+              className="w-1 shrink-0 bg-white/[0.05] hover:bg-green/30 cursor-col-resize transition-colors select-none"
             />
 
-            {/* Chat panel */}
-            <div className="flex-1 min-w-0 flex flex-col border-l border-border">
+            {/* Chat column */}
+            <div className="flex-1 min-w-0 flex flex-col">
               <ChatPanel messages={messages} onSend={sendMessage} />
             </div>
           </div>
         )}
 
-        {/* Session ended */}
+        {/* ── Ended ── */}
         {sessionState === 'ended' && (
           <div className="flex-1 flex flex-col items-center justify-center gap-6 p-8">
-            <div className="text-center space-y-2">
-              <div className="text-4xl">👋</div>
-              <h2 className="font-mono text-lg font-bold text-text-primary">session ended</h2>
-              <p className="text-text-muted text-sm">they disconnected or skipped</p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => startMatching(selectedTags)}
-                className="bg-green text-base font-semibold rounded-xl px-6 py-2.5 hover:bg-green-dim transition-colors"
-              >
-                find next →
-              </button>
-              <button
-                onClick={stopMatching}
-                className="border border-border rounded-xl px-6 py-2.5 text-text-muted hover:bg-elevated transition-colors text-sm"
-              >
-                stop
-              </button>
+            <div className="glass rounded-3xl p-8 text-center space-y-4 shadow-glass max-w-xs w-full">
+              <div className="text-5xl">👋</div>
+              <div>
+                <h2 className="font-bold text-white text-xl tracking-tight">Session ended</h2>
+                <p className="text-white/40 text-sm mt-1">They disconnected or skipped</p>
+              </div>
+              <div className="flex gap-2.5">
+                <button
+                  onClick={() => startMatching(selectedTags)}
+                  className="flex-1 bg-green text-white font-semibold rounded-2xl py-3 text-sm hover:bg-green-dim transition-all shadow-green-glow"
+                >
+                  Next →
+                </button>
+                <button
+                  onClick={stopMatching}
+                  className="flex-1 glass rounded-2xl py-3 text-white/60 hover:text-white text-sm font-medium transition-all"
+                >
+                  Stop
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -243,26 +218,13 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
 
       {/* Modals */}
       {incomingReveal && !revealedIdentity && (
-        <RevealModal
-          mode="incoming"
-          onAccept={() => respondToReveal(true)}
-          onDecline={() => respondToReveal(false)}
-        />
+        <RevealModal mode="incoming" onAccept={() => respondToReveal(true)} onDecline={() => respondToReveal(false)} />
       )}
-
       {revealedIdentity && (
-        <RevealModal
-          mode="identity"
-          identity={revealedIdentity}
-          onClose={dismissReveal}
-        />
+        <RevealModal mode="identity" identity={revealedIdentity} onClose={dismissReveal} />
       )}
-
       {showReport && (
-        <ReportModal
-          onReport={reportUser}
-          onClose={() => setShowReport(false)}
-        />
+        <ReportModal onReport={reportUser} onClose={() => setShowReport(false)} />
       )}
     </div>
   );

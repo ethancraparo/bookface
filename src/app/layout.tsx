@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <body className="font-sans bg-base text-text-primary min-h-screen">
+      <body className="font-sans text-text-primary min-h-screen">
         <Providers>{children}</Providers>
       </body>
     </html>

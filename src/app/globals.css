@@ -2,47 +2,72 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --font-geist-sans: 'Geist', system-ui, sans-serif;
-  --font-geist-mono: 'Geist Mono', monospace;
-}
-
-* {
-  box-sizing: border-box;
-}
-
+/* ── Base ─────────────────────────────────────────────── */
 html,
 body {
-  background-color: #0a0a0f;
-  color: #e8e8f0;
   height: 100%;
+  color: #f5f5f7;
+  background-color: #070710;
+  /* Subtle macOS-style gradient — deep indigo corners */
+  background-image:
+    radial-gradient(ellipse 90% 50% at 15% 0%,   rgba(99,102,241,0.14) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 85% 100%,  rgba(139,92,246,0.09) 0%, transparent 55%);
+  background-attachment: fixed;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 4px;
+* { box-sizing: border-box; }
+
+/* ── Typography helpers ───────────────────────────────── */
+.text-sf {
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  letter-spacing: -0.01em;
 }
-::-webkit-scrollbar-track {
-  background: #111118;
+
+/* ── Glass utility ────────────────────────────────────── */
+@layer utilities {
+  .glass {
+    background: rgba(255, 255, 255, 0.07);
+    backdrop-filter: blur(24px) saturate(1.8);
+    -webkit-backdrop-filter: blur(24px) saturate(1.8);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+  .glass-sm {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(12px) saturate(1.6);
+    -webkit-backdrop-filter: blur(12px) saturate(1.6);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+  .glass-heavy {
+    background: rgba(255, 255, 255, 0.10);
+    backdrop-filter: blur(40px) saturate(2);
+    -webkit-backdrop-filter: blur(40px) saturate(2);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+  }
+  .inset-highlight {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
 }
+
+/* ── Scrollbar ────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: #2a2a3a;
-  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
-/* Video elements */
-video {
-  object-fit: cover;
-}
-
-/* Focus ring */
+/* ── Focus / selection ────────────────────────────────── */
 :focus-visible {
-  outline: 2px solid #22c55e;
+  outline: 2px solid #30d158;
   outline-offset: 2px;
 }
-
-/* Selection */
 ::selection {
-  background: #22c55e33;
-  color: #e8e8f0;
+  background: rgba(48, 209, 88, 0.25);
+  color: #f5f5f7;
 }
+
+/* ── Video elements ───────────────────────────────────── */
+video { object-fit: cover; }

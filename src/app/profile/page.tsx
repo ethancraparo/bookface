@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { INTEREST_TAGS } from '@/types';
 import TagSelector from '@/components/TagSelector';
 
 export default function ProfilePage() {
@@ -42,14 +41,12 @@ export default function ProfilePage() {
     setLoading(true);
     setError('');
     setSuccess(false);
-
     const res = await fetch('/api/profile', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ handle, githubUrl, twitterUrl, contactEmail, tags }),
     });
     const data = await res.json();
-
     if (!res.ok) {
       setError(data.error ?? 'Failed to save');
     } else {
@@ -61,35 +58,35 @@ export default function ProfilePage() {
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <span className="font-mono text-text-muted animate-pulse">loading...</span>
+        <div className="w-6 h-6 rounded-full border-2 border-green border-t-transparent animate-spin" />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-lg">
+      <div className="w-full max-w-lg animate-fade-in">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <span className="font-mono text-xl font-bold text-green">bookface</span>
-            <p className="text-text-muted text-sm mt-0.5">set up your profile</p>
+            <h1 className="text-xl font-bold text-white tracking-tight">Your profile</h1>
+            <p className="text-white/40 text-sm mt-0.5">Shown only on mutual identity reveal</p>
           </div>
           <button
             onClick={() => router.push('/match')}
-            className="text-sm text-text-muted hover:text-text-primary transition-colors font-mono"
+            className="text-sm text-white/40 hover:text-white/80 transition-colors px-3 py-1.5 rounded-xl hover:bg-white/5"
           >
-            skip →
+            Skip →
           </button>
         </div>
 
-        <form onSubmit={handleSave} className="bg-surface border border-border rounded-xl p-6 space-y-5">
+        <form onSubmit={handleSave} className="glass rounded-3xl p-6 shadow-glass space-y-5">
           {/* Handle */}
           <div>
-            <label className="block text-xs font-mono text-text-muted mb-1.5">
-              handle <span className="text-danger">*</span>
+            <label className="block text-sm font-medium text-white/60 mb-2">
+              Handle <span className="text-danger">*</span>
             </label>
-            <div className="flex items-center bg-elevated border border-border rounded-lg overflow-hidden focus-within:border-green transition-colors">
-              <span className="px-3 text-text-dim font-mono text-sm">@</span>
+            <div className="flex items-center bg-white/[0.06] border border-white/[0.1] rounded-2xl overflow-hidden focus-within:border-green/60 transition-all">
+              <span className="px-4 text-white/30 font-mono text-sm select-none">@</span>
               <input
                 value={handle}
                 onChange={(e) => setHandle(e.target.value)}
@@ -97,18 +94,18 @@ export default function ProfilePage() {
                 required
                 maxLength={30}
                 pattern="[a-zA-Z0-9_]+"
-                className="flex-1 bg-transparent py-2.5 pr-3 text-sm focus:outline-none"
+                className="flex-1 bg-transparent py-3 pr-4 text-sm text-white focus:outline-none"
               />
             </div>
-            <p className="text-text-dim text-xs font-mono mt-1">letters, numbers, underscores only</p>
+            <p className="text-white/25 text-xs font-mono mt-1.5 px-1">letters, numbers, underscores only</p>
           </div>
 
           {/* GitHub */}
           <div>
-            <label className="block text-xs font-mono text-text-muted mb-1.5">
-              github url
+            <label className="block text-sm font-medium text-white/60 mb-2">
+              GitHub URL
               {isGithubLinked && (
-                <span className="ml-2 text-green">● linked</span>
+                <span className="ml-2 text-green text-xs font-normal">● linked</span>
               )}
             </label>
             <input
@@ -116,60 +113,67 @@ export default function ProfilePage() {
               onChange={(e) => setGithubUrl(e.target.value)}
               placeholder="https://github.com/you"
               type="url"
-              className="w-full bg-elevated border border-border rounded-lg px-3 py-2.5 text-sm placeholder:text-text-dim focus:outline-none focus:border-green transition-colors"
+              className="w-full bg-white/[0.06] border border-white/[0.1] rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-green/60 transition-all"
             />
           </div>
 
           {/* Twitter */}
           <div>
-            <label className="block text-xs font-mono text-text-muted mb-1.5">twitter / x</label>
+            <label className="block text-sm font-medium text-white/60 mb-2">Twitter / X</label>
             <input
               value={twitterUrl}
               onChange={(e) => setTwitterUrl(e.target.value)}
               placeholder="https://x.com/you"
               type="url"
-              className="w-full bg-elevated border border-border rounded-lg px-3 py-2.5 text-sm placeholder:text-text-dim focus:outline-none focus:border-green transition-colors"
+              className="w-full bg-white/[0.06] border border-white/[0.1] rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-green/60 transition-all"
             />
           </div>
 
           {/* Contact email */}
           <div>
-            <label className="block text-xs font-mono text-text-muted mb-1.5">contact email</label>
+            <label className="block text-sm font-medium text-white/60 mb-2">Contact email</label>
             <input
               value={contactEmail}
               onChange={(e) => setContactEmail(e.target.value)}
               placeholder="you@example.com"
               type="email"
-              className="w-full bg-elevated border border-border rounded-lg px-3 py-2.5 text-sm placeholder:text-text-dim focus:outline-none focus:border-green transition-colors"
+              className="w-full bg-white/[0.06] border border-white/[0.1] rounded-2xl px-4 py-3 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-green/60 transition-all"
             />
-            <p className="text-text-dim text-xs font-mono mt-1">only shown on mutual identity reveal</p>
+            <p className="text-white/25 text-xs font-mono mt-1.5 px-1">only shown on mutual reveal</p>
           </div>
 
           {/* Tags */}
           <div>
-            <label className="block text-xs font-mono text-text-muted mb-2">
-              interests <span className="text-text-dim">(optional — for better matching)</span>
+            <label className="block text-sm font-medium text-white/60 mb-2">
+              Interests <span className="text-white/25 font-normal">(optional — for better matching)</span>
             </label>
             <TagSelector selected={tags} onChange={setTags} />
           </div>
 
-          {error && <p className="text-danger text-xs font-mono">{error}</p>}
-          {success && <p className="text-green text-xs font-mono">✓ saved</p>}
+          {error && <p className="text-danger text-sm px-1">{error}</p>}
+          {success && (
+            <p className="text-green text-sm px-1 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              Saved
+            </p>
+          )}
 
-          <div className="flex gap-3">
+          <div className="flex gap-2.5 pt-1">
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 bg-green text-base font-semibold rounded-lg px-4 py-2.5 text-sm hover:bg-green-dim transition-colors disabled:opacity-50"
+              className="flex-1 bg-green text-white font-semibold rounded-2xl px-4 py-3 text-sm hover:bg-green-dim transition-all disabled:opacity-50 shadow-green-glow"
             >
-              {loading ? 'saving...' : 'save profile'}
+              {loading ? 'Saving…' : 'Save profile'}
             </button>
             <button
               type="button"
               onClick={() => router.push('/match')}
-              className="px-4 py-2.5 text-sm border border-border rounded-lg hover:bg-elevated transition-colors text-text-muted"
+              className="px-5 py-3 text-sm glass rounded-2xl text-white/60 hover:text-white transition-all"
             >
-              go to match
+              Match →
             </button>
           </div>
         </form>
