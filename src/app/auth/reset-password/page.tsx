@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
@@ -12,6 +12,14 @@ function validate(password: string) {
 }
 
 export default function ResetPasswordPage() {
+  return (
+    <Suspense>
+      <ResetPasswordContent />
+    </Suspense>
+  );
+}
+
+function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
 
