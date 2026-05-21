@@ -57,6 +57,7 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
     setShowReport,
     setSelectedTags,
     clearError,
+    dismissReveal,
   } = useMatch({ userId });
 
   const isActive = sessionState === 'active' || sessionState === 'connecting';
@@ -155,7 +156,7 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
         {isActive && (
           <div className="flex-1 flex overflow-hidden">
             {/* Video area */}
-            <div className="flex-1 flex flex-col p-3 gap-3 min-w-0">
+            <div className="flex-[2] flex flex-col p-3 gap-3 min-w-0">
               <VideoGrid
                 localStream={localStream}
                 remoteStream={remoteStream}
@@ -177,7 +178,7 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
             </div>
 
             {/* Chat panel */}
-            <div className="w-72 shrink-0 flex flex-col border-l border-border">
+            <div className="flex-[3] min-w-0 flex flex-col border-l border-border">
               <ChatPanel messages={messages} onSend={sendMessage} />
             </div>
           </div>
@@ -222,7 +223,7 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
         <RevealModal
           mode="identity"
           identity={revealedIdentity}
-          onClose={() => {}}
+          onClose={dismissReveal}
         />
       )}
 

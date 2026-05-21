@@ -275,6 +275,7 @@ export function useMatch({ userId }: UseMatchOptions) {
   }, []);
 
   const clearError = useCallback(() => setErrorMsg(null), []);
+  const dismissReveal = useCallback(() => setRevealedIdentity(null), []);
 
   return {
     // State
@@ -303,5 +304,6 @@ export function useMatch({ userId }: UseMatchOptions) {
     setShowReport,
     setSelectedTags,
     clearError,
+    dismissReveal,
   };
 }

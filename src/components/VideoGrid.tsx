@@ -47,16 +47,16 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
 
       {/* Local video — PiP */}
       <div className="absolute bottom-3 right-3 w-36 h-24 rounded-lg overflow-hidden border-2 border-border shadow-xl bg-surface">
-        {localStream && !isVideoOff ? (
-          <video
-            ref={localRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-cover scale-x-[-1]"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-elevated">
+        {/* Always keep video in DOM — unmounting clears srcObject and breaks re-enable */}
+        <video
+          ref={localRef}
+          autoPlay
+          playsInline
+          muted
+          className={`w-full h-full object-cover scale-x-[-1]${isVideoOff || !localStream ? ' hidden' : ''}`}
+        />
+        {(isVideoOff || !localStream) && (
+          <div className="absolute inset-0 flex items-center justify-center bg-elevated">
             <span className="text-lg">🚫</span>
           </div>
         )}
