@@ -16,7 +16,9 @@ model User {
   twitterUrl    String?
   contactEmail  String?
   tags          String[]  @default([])
-  password      String?
+  password           String?
+  resetToken         String?   @unique
+  resetTokenExpiry   DateTime?
   strikes       Int       @default(0)
   isBanned      Boolean   @default(false)
   bannedUntil   DateTime?

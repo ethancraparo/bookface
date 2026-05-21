@@ -10,8 +10,12 @@ export default function ForgotPasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    // Small delay to feel real — email service can be wired in here later
-    await new Promise((r) => setTimeout(r, 800));
+    await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    // Always show success — never reveal if the email exists
     setLoading(false);
     setSubmitted(true);
   }

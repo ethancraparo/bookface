@@ -41,10 +41,18 @@ function ResetPasswordContent() {
     setLoading(true);
     setError('');
 
-    // TODO: wire to POST /api/auth/reset-password with { token, password }
-    await new Promise((r) => setTimeout(r, 800));
+    const res = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password }),
+    });
+    const data = await res.json();
     setLoading(false);
-    setDone(true);
+    if (!res.ok) {
+      setError(data.error ?? 'Something went wrong');
+    } else {
+      setDone(true);
+    }
   }
 
   // Invalid / missing token
