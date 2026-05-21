@@ -33,10 +33,14 @@ model User {
 
   accounts    Account[]
   sessions    Session[]
-  reports     Report[]  @relation("ReportedUser")
-  reportsMade Report[]  @relation("ReporterUser")
-  blocks      Block[]   @relation("Blocker")
-  blockedBy   Block[]   @relation("Blocked")
+  reports         Report[]       @relation("ReportedUser")
+  reportsMade     Report[]       @relation("ReporterUser")
+  blocks          Block[]        @relation("Blocker")
+  blockedBy       Block[]        @relation("Blocked")
+  friendsRequested Friendship[]  @relation("FriendshipRequester")
+  friendsReceived  Friendship[]  @relation("FriendshipAddressee")
+  sentMessages     DirectMessage[] @relation("SentMessages")
+  receivedMessages DirectMessage[] @relation("ReceivedMessages")
 }
 
 model Account {
@@ -83,6 +87,37 @@ model Report {
 
   reporter User @relation("ReporterUser", fields: [reporterId], references: [id])
   reported User @relation("ReportedUser", fields: [reportedId], references: [id])
+}
+
+model Friendship {
+  id          String           @id @default(cuid())
+  requesterId String
+  addresseeId String
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  requester User @relation("FriendshipRequester", fields: [requesterId], references: [id])
+  addressee User @relation("FriendshipAddressee", fields: [addresseeId], references: [id])
+
+  @@unique([requesterId, addresseeId])
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+}
+
+model DirectMessage {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  content    String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("SentMessages",    fields: [senderId],   references: [id])
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id])
 }
 
 model Block {

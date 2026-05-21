@@ -18,12 +18,33 @@ export interface ChatMessage {
 }
 
 export interface RevealedIdentity {
+  userId: string;
   handle: string | null;
   bio: string | null;
   githubUrl: string | null;
   twitterUrl: string | null;
   contactEmail: string | null;
   isVerifiedDev: boolean;
+}
+
+export interface DMMessage {
+  id: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+  read: boolean;
+}
+
+export interface Friend {
+  id: string;           // friendship id
+  userId: string;
+  handle: string | null;
+  bio: string | null;
+  isVerifiedDev: boolean;
+  status: 'ACCEPTED' | 'PENDING';
+  iRequested: boolean;  // true if I sent the request
+  lastMessage?: DMMessage | null;
+  unreadCount?: number;
 }
 
 export interface MatchState {

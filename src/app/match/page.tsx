@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -46,6 +46,18 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
   const [splitPercent, setSplitPercent] = useState(42);
   const isDividerDragging = useRef(false);
   const splitContainerRef = useRef<HTMLDivElement>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [pendingRequests, setPendingRequests] = useState(0);
+
+  const refreshCounts = useCallback(() => {
+    fetch('/api/friends').then((r) => r.json()).then((data) => {
+      if (!Array.isArray(data)) return;
+      setUnreadCount(data.reduce((n: number, f: { unreadCount?: number }) => n + (f.unreadCount ?? 0), 0));
+      setPendingRequests(data.filter((f: { status: string; iRequested: boolean }) => f.status === 'PENDING' && !f.iRequested).length);
+    });
+  }, []);
+
+  useEffect(() => { refreshCounts(); }, [refreshCounts]);
 
   useEffect(() => {
     function onMouseMove(e: MouseEvent) {
@@ -72,25 +84,37 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
         <Link href="/" className="text-base font-bold tracking-tight text-white hover:opacity-80 transition-opacity">
           book<span className="text-green">face</span>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {handle && (
-            <span className="text-sm text-white/40 font-mono">@{handle}</span>
+            <span className="text-sm text-white/40 font-mono mr-1">@{handle}</span>
           )}
-          <Link
-            href="/profile"
-            className="w-8 h-8 rounded-full glass flex items-center justify-center text-white/50 hover:text-white transition-colors"
-            title="Profile"
-          >
+          {/* Friends */}
+          <Link href="/friends" title="Friends" className="relative w-8 h-8 rounded-full glass flex items-center justify-center text-white/50 hover:text-white transition-colors">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            {pendingRequests > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-blue text-white text-[9px] font-bold flex items-center justify-center">{pendingRequests}</span>
+            )}
+          </Link>
+          {/* Messages */}
+          <Link href="/messages" title="Messages" className="relative w-8 h-8 rounded-full glass flex items-center justify-center text-white/50 hover:text-white transition-colors">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-green text-white text-[9px] font-bold flex items-center justify-center">{unreadCount}</span>
+            )}
+          </Link>
+          {/* Profile */}
+          <Link href="/profile" title="Profile" className="w-8 h-8 rounded-full glass flex items-center justify-center text-white/50 hover:text-white transition-colors">
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
               <circle cx="12" cy="7" r="4"/>
             </svg>
           </Link>
-          <button
-            onClick={() => signOut({ callbackUrl: '/' })}
-            title="Sign out"
-            className="w-8 h-8 rounded-full glass flex items-center justify-center text-white/30 hover:text-danger transition-colors"
-          >
+          {/* Sign out */}
+          <button onClick={() => signOut({ callbackUrl: '/' })} title="Sign out" className="w-8 h-8 rounded-full glass flex items-center justify-center text-white/30 hover:text-danger transition-colors">
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
             </svg>

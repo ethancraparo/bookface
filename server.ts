@@ -226,7 +226,8 @@ app.prepare().then(() => {
 
       if (!myProfile || !partnerProfile) return;
 
-      const fmt = (p: typeof myProfile) => ({
+      const fmt = (p: typeof myProfile, uid: string) => ({
+        userId:       uid,
         handle:       p.revealHandle  ? p.handle       : null,
         bio:          p.revealBio     ? p.bio          : null,
         githubUrl:    p.revealGithub  ? p.githubUrl    : null,
@@ -235,8 +236,8 @@ app.prepare().then(() => {
         isVerifiedDev: p.accounts.some((a) => a.provider === 'github'),
       });
 
-      socket.emit('identity_revealed', fmt(partnerProfile));
-      io.to(session.partnerSocketId).emit('identity_revealed', fmt(myProfile));
+      socket.emit('identity_revealed', fmt(partnerProfile, session.partnerUserId));
+      io.to(session.partnerSocketId).emit('identity_revealed', fmt(myProfile, currentUserId));
     });
 
     // ── Report ────────────────────────────────────────────────────────────
@@ -304,6 +305,70 @@ app.prepare().then(() => {
       if (session) {
         io.to(session.partnerSocketId).emit('partner_disconnected');
       }
+    });
+  });
+
+  // ── DM namespace ─────────────────────────────────────────────────────────
+  // Persistent socket for direct messages — users register when on /messages
+
+  const dmUserSockets = new Map<string, string>(); // userId → socketId
+  const dm = io.of('/dm');
+
+  dm.on('connection', (socket) => {
+    let registeredUserId: string | null = null;
+
+    socket.on('register', (userId: string) => {
+      registeredUserId = userId;
+      dmUserSockets.set(userId, socket.id);
+    });
+
+    socket.on('send_message', async ({ toUserId, content }: { toUserId: string; content: string }) => {
+      if (!registeredUserId || !content?.trim()) return;
+
+      // Verify friendship
+      const friendship = await prisma.friendship.findFirst({
+        where: {
+          status: 'ACCEPTED',
+          OR: [
+            { requesterId: registeredUserId, addresseeId: toUserId },
+            { requesterId: toUserId, addresseeId: registeredUserId },
+          ],
+        },
+      });
+      if (!friendship) return;
+
+      const message = await prisma.directMessage.create({
+        data: { senderId: registeredUserId, receiverId: toUserId, content: content.trim() },
+      });
+
+      const payload = {
+        id: message.id,
+        senderId: registeredUserId,
+        content: message.content,
+        createdAt: message.createdAt.toISOString(),
+        read: false,
+      };
+
+      // Deliver to recipient if online
+      const recipientSocketId = dmUserSockets.get(toUserId);
+      if (recipientSocketId) {
+        dm.to(recipientSocketId).emit('message', payload);
+      }
+
+      // Confirm to sender
+      socket.emit('message_sent', payload);
+    });
+
+    socket.on('mark_read', async ({ fromUserId }: { fromUserId: string }) => {
+      if (!registeredUserId) return;
+      await prisma.directMessage.updateMany({
+        where: { senderId: fromUserId, receiverId: registeredUserId, read: false },
+        data: { read: true },
+      });
+    });
+
+    socket.on('disconnect', () => {
+      if (registeredUserId) dmUserSockets.delete(registeredUserId);
     });
   });
 

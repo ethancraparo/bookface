@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { RevealedIdentity } from '@/types';
 
 interface IncomingProps {
@@ -63,6 +64,23 @@ function IncomingReveal({ onAccept, onDecline }: { onAccept: () => void; onDecli
 }
 
 function IdentityReveal({ identity, onClose }: { identity: RevealedIdentity; onClose: () => void }) {
+  const [friendStatus, setFriendStatus] = useState<'idle' | 'loading' | 'sent' | 'friends'>('idle');
+
+  async function sendFriendRequest() {
+    setFriendStatus('loading');
+    const res = await fetch('/api/friends', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ addresseeId: identity.userId }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setFriendStatus(data.status === 'ACCEPTED' ? 'friends' : 'sent');
+    } else {
+      setFriendStatus(data.error === 'Already friends' ? 'friends' : 'sent');
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -120,12 +138,47 @@ function IdentityReveal({ identity, onClose }: { identity: RevealedIdentity; onC
         )}
       </div>
 
-      <button
-        onClick={onClose}
-        className="w-full py-3 rounded-2xl glass text-white/60 hover:text-white font-medium text-sm transition-all"
-      >
-        Done
-      </button>
+      <div className="flex gap-2.5">
+        {friendStatus === 'idle' && (
+          <button
+            onClick={sendFriendRequest}
+            className="flex-1 py-3 rounded-2xl bg-blue/15 border border-blue/30 text-blue font-medium text-sm hover:bg-blue/25 transition-all flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>
+            </svg>
+            Add friend
+          </button>
+        )}
+        {friendStatus === 'loading' && (
+          <div className="flex-1 py-3 rounded-2xl bg-blue/10 border border-blue/20 text-blue/60 text-sm flex items-center justify-center gap-2">
+            <div className="w-3.5 h-3.5 rounded-full border-2 border-blue/40 border-t-blue animate-spin" />
+            Sending…
+          </div>
+        )}
+        {friendStatus === 'sent' && (
+          <div className="flex-1 py-3 rounded-2xl bg-blue/10 border border-blue/20 text-blue text-sm flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            Request sent
+          </div>
+        )}
+        {friendStatus === 'friends' && (
+          <div className="flex-1 py-3 rounded-2xl bg-green/10 border border-green/20 text-green text-sm flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            Friends!
+          </div>
+        )}
+        <button
+          onClick={onClose}
+          className="flex-1 py-3 rounded-2xl glass text-white/60 hover:text-white font-medium text-sm transition-all"
+        >
+          Done
+        </button>
+      </div>
     </div>
   );
 }
