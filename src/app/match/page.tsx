@@ -1,5 +1,5 @@
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -54,11 +54,33 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
     reportUser,
     toggleMute,
     toggleVideo,
+    toggleScreenShare,
+    isScreenSharing,
     setShowReport,
     setSelectedTags,
     clearError,
     dismissReveal,
   } = useMatch({ userId });
+
+  const [splitPercent, setSplitPercent] = useState(40);
+  const isDividerDragging = useRef(false);
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onMouseMove(e: MouseEvent) {
+      if (!isDividerDragging.current || !splitContainerRef.current) return;
+      const rect = splitContainerRef.current.getBoundingClientRect();
+      const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      setSplitPercent(Math.max(20, Math.min(80, pct)));
+    }
+    function onMouseUp() { isDividerDragging.current = false; }
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
 
   const isActive = sessionState === 'active' || sessionState === 'connecting';
 
@@ -154,20 +176,23 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
 
         {/* Active / connecting */}
         {isActive && (
-          <div className="flex-1 flex overflow-hidden">
+          <div ref={splitContainerRef} className="flex-1 flex overflow-hidden">
             {/* Video area */}
-            <div className="flex-[2] flex flex-col p-3 gap-3 min-w-0">
+            <div style={{ width: `${splitPercent}%` }} className="flex flex-col p-3 gap-3 min-w-0 shrink-0">
               <VideoGrid
                 localStream={localStream}
                 remoteStream={remoteStream}
                 isVideoOff={isVideoOff}
                 isAudioMuted={isAudioMuted}
+                isScreenSharing={isScreenSharing}
               />
               <Controls
                 isAudioMuted={isAudioMuted}
                 isVideoOff={isVideoOff}
+                isScreenSharing={isScreenSharing}
                 onToggleMute={toggleMute}
                 onToggleVideo={toggleVideo}
+                onToggleScreenShare={toggleScreenShare}
                 onSkip={skip}
                 onReveal={requestReveal}
                 onReport={() => setShowReport(true)}
@@ -177,8 +202,14 @@ function MatchPageInner({ userId, handle }: { userId: string; handle?: string })
               />
             </div>
 
+            {/* Resizable divider */}
+            <div
+              onMouseDown={() => { isDividerDragging.current = true; }}
+              className="w-1 shrink-0 bg-border hover:bg-cyan/50 cursor-col-resize transition-colors select-none"
+            />
+
             {/* Chat panel */}
-            <div className="flex-[3] min-w-0 flex flex-col border-l border-border">
+            <div className="flex-1 min-w-0 flex flex-col border-l border-border">
               <ChatPanel messages={messages} onSend={sendMessage} />
             </div>
           </div>

@@ -24,12 +24,15 @@ export function useMatch({ userId }: UseMatchOptions) {
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const isScreenSharingRef = useRef(false);
 
   const [sessionState, setSessionState] = useState<SessionState>('idle');
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [incomingReveal, setIncomingReveal] = useState(false);
   const [revealPending, setRevealPending] = useState(false);
@@ -274,6 +277,39 @@ export function useMatch({ userId }: UseMatchOptions) {
     setIsVideoOff((v) => !v);
   }, []);
 
+  const stopScreenShare = useCallback(() => {
+    screenStreamRef.current?.getTracks().forEach((t) => t.stop());
+    screenStreamRef.current = null;
+    const cameraTrack = localStreamRef.current?.getVideoTracks()[0];
+    if (cameraTrack && pcRef.current) {
+      const sender = pcRef.current.getSenders().find((s) => s.track?.kind === 'video');
+      sender?.replaceTrack(cameraTrack);
+    }
+    isScreenSharingRef.current = false;
+    setIsScreenSharing(false);
+  }, []);
+
+  const toggleScreenShare = useCallback(async () => {
+    if (isScreenSharingRef.current) {
+      stopScreenShare();
+      return;
+    }
+    try {
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      screenStreamRef.current = screenStream;
+      const screenTrack = screenStream.getVideoTracks()[0];
+      if (pcRef.current) {
+        const sender = pcRef.current.getSenders().find((s) => s.track?.kind === 'video');
+        await sender?.replaceTrack(screenTrack);
+      }
+      screenTrack.onended = stopScreenShare;
+      isScreenSharingRef.current = true;
+      setIsScreenSharing(true);
+    } catch {
+      // user cancelled the picker
+    }
+  }, [stopScreenShare]);
+
   const clearError = useCallback(() => setErrorMsg(null), []);
   const dismissReveal = useCallback(() => setRevealedIdentity(null), []);
 
@@ -301,9 +337,12 @@ export function useMatch({ userId }: UseMatchOptions) {
     reportUser,
     toggleMute,
     toggleVideo,
+    toggleScreenShare,
     setShowReport,
     setSelectedTags,
     clearError,
     dismissReveal,
+    // Screen share
+    isScreenSharing,
   };
 }

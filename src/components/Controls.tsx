@@ -3,8 +3,10 @@
 interface Props {
   isAudioMuted: boolean;
   isVideoOff: boolean;
+  isScreenSharing: boolean;
   onToggleMute: () => void;
   onToggleVideo: () => void;
+  onToggleScreenShare: () => void;
   onSkip: () => void;
   onReveal: () => void;
   onReport: () => void;
@@ -16,8 +18,10 @@ interface Props {
 export default function Controls({
   isAudioMuted,
   isVideoOff,
+  isScreenSharing,
   onToggleMute,
   onToggleVideo,
+  onToggleScreenShare,
   onSkip,
   onReveal,
   onReport,
@@ -36,7 +40,7 @@ export default function Controls({
         skip
       </button>
 
-      {/* Center: A/V controls */}
+      {/* Center: A/V + screen share */}
       <div className="flex items-center gap-2">
         <ControlBtn
           onClick={onToggleMute}
@@ -53,6 +57,14 @@ export default function Controls({
           inactiveLabel="📷"
           activeClass="bg-danger border-danger text-white"
           tooltip={isVideoOff ? 'show camera' : 'hide camera'}
+        />
+        <ControlBtn
+          onClick={onToggleScreenShare}
+          active={isScreenSharing}
+          activeLabel="🖥️"
+          inactiveLabel="🖥️"
+          activeClass="bg-green/20 border-green text-green"
+          tooltip={isScreenSharing ? 'stop sharing' : 'share screen'}
         />
       </div>
 
