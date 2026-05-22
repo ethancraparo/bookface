@@ -11,6 +11,7 @@ import Controls from '@/components/Controls';
 import WaitingScreen from '@/components/WaitingScreen';
 import TagSelector from '@/components/TagSelector';
 import { ChatMessage, ReportCategory, RevealedIdentity } from '@/types';
+import IdleDashboard from '@/components/IdleDashboard';
 
 // ── Root page — session guard ─────────────────────────────────────────────────
 
@@ -251,6 +252,20 @@ function LiveMatchView({ userId, handle }: { userId: string; handle?: string }) 
 
   const isActive = sessionState === 'active' || sessionState === 'connecting';
 
+  // Idle state: full-screen tabbed dashboard (no match header needed — dashboard has its own)
+  if (sessionState === 'idle') {
+    return (
+      <div className="h-screen flex flex-col overflow-hidden">
+        <IdleDashboard
+          handle={handle}
+          selectedTags={selectedTags}
+          setSelectedTags={setSelectedTags}
+          startMatching={startMatching}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <MatchHeader handle={handle} unreadCount={unreadCount} pendingRequests={pendingRequests} />
@@ -267,30 +282,6 @@ function LiveMatchView({ userId, handle }: { userId: string; handle?: string }) 
       )}
 
       <div className="flex-1 overflow-hidden flex flex-col">
-
-        {/* Idle */}
-        {sessionState === 'idle' && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-8 p-8">
-            <div className="text-center space-y-2">
-              <h2 className="text-2xl font-bold text-white tracking-tight">Ready to match?</h2>
-              <p className="text-white/50 text-[15px]">Pick tags to find your kind of coder, or go random</p>
-            </div>
-            <div className="w-full max-w-md glass rounded-3xl p-6 shadow-glass space-y-5">
-              <div>
-                <p className="text-sm font-medium text-white/60 mb-3">Interest tags <span className="text-white/30 font-normal">(optional)</span></p>
-                <TagSelector selected={selectedTags} onChange={setSelectedTags} />
-              </div>
-              <button onClick={() => startMatching(selectedTags)} className="w-full bg-green text-white font-semibold rounded-2xl py-3.5 text-[15px] hover:bg-green-dim transition-all hover:scale-[1.01] active:scale-[0.99] shadow-green-glow">
-                Find a match →
-              </button>
-            </div>
-            {!handle && (
-              <p className="text-sm text-white/30">
-                <Link href="/profile" className="text-green hover:underline">Set up your profile</Link>{' '}so you're ready when you connect
-              </p>
-            )}
-          </div>
-        )}
 
         {/* Waiting */}
         {sessionState === 'waiting' && <WaitingScreen onCancel={stopMatching} selectedTags={selectedTags} />}
