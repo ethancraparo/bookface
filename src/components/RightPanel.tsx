@@ -608,7 +608,7 @@ function FriendsTab({ friends, loading, onlineSet, onRefresh, onOpenProfile }: {
   if (loading) return <Spinner />;
 
   return (
-    <div className="px-4 py-4 space-y-4">
+    <div className="relative h-full px-4 py-4 space-y-4">
       {/* Incoming requests */}
       {incoming.length > 0 && (
         <section className="glass rounded-2xl p-4 space-y-3">
@@ -629,21 +629,20 @@ function FriendsTab({ friends, loading, onlineSet, onRefresh, onOpenProfile }: {
         </section>
       )}
 
-      {/* Friends list */}
-      <section className="glass rounded-2xl p-4 space-y-1">
-        <Label>Friends <span className="text-white/30 ml-1">{accepted.length}</span></Label>
-        {accepted.length === 0 && outgoing.length === 0 && (
-          <div className="text-center py-6">
-            <p className="text-white/25 text-sm">No friends yet.</p>
-            <p className="text-white/20 text-xs mt-1">Reveal during a match to connect.</p>
-          </div>
-        )}
+      {/* Empty state — centered in panel */}
+      {accepted.length === 0 && outgoing.length === 0 && incoming.length === 0 && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+          <p className="text-white/30 text-sm">No friends yet.</p>
+          <p className="text-white/20 text-xs mt-1">Reveal during a match to connect.</p>
+        </div>
+      )}
+
+      <div className="space-y-0.5">
         {sorted.map((f) => {
           const isOnline = onlineSet.has(f.userId);
           return (
             <button key={f.id} onClick={() => onOpenProfile(f.userId)}
-              className="w-full flex items-center gap-3 rounded-xl hover:bg-white/5 -mx-1 px-1 py-2.5 transition-all group text-left">
-              {/* Avatar with online dot */}
+              className="w-full flex items-center gap-3 rounded-xl hover:bg-white/5 px-1 py-2.5 transition-all group text-left">
               <div className="relative shrink-0">
                 <Avatar handle={f.handle} v={f.isVerifiedDev} />
                 {isOnline && (
@@ -664,7 +663,6 @@ function FriendsTab({ friends, loading, onlineSet, onRefresh, onOpenProfile }: {
           );
         })}
 
-        {/* Pending outgoing */}
         {outgoing.map((f) => (
           <div key={f.id} className="flex items-center gap-3 opacity-50 px-1 py-2.5">
             <Avatar handle={f.handle} v={f.isVerifiedDev} />
@@ -675,7 +673,7 @@ function FriendsTab({ friends, loading, onlineSet, onRefresh, onOpenProfile }: {
             <button onClick={() => decline(f.id)} className="text-xs text-white/30 hover:text-danger transition-colors px-1 shrink-0">Cancel</button>
           </div>
         ))}
-      </section>
+      </div>
     </div>
   );
 }
@@ -700,12 +698,11 @@ function MessagesTab({ friends, loading, onOpenConvo, onRefresh }: {
     return tb - ta;
   });
   return (
-    <div className="px-4 py-4">
-      <div className="glass rounded-2xl overflow-hidden">
-        {sorted.length === 0
-          ? <div className="text-center py-10 px-4"><p className="text-white/25 text-sm">No messages yet.</p><p className="text-white/20 text-xs mt-1">Reveal during a match to add friends.</p></div>
-          : <div className="divide-y divide-white/[0.06]">
-              {sorted.map((f) => {
+    <div className="relative h-full px-4 py-4">
+      {sorted.length === 0
+        ? <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none"><p className="text-white/30 text-sm">No messages yet.</p><p className="text-white/20 text-xs mt-1">Reveal during a match to add friends.</p></div>
+        : <div className="divide-y divide-white/[0.06]">
+            {sorted.map((f) => {
                 const isConfirming = confirmDeleteId === f.userId;
                 return (
                   <div key={f.id} className="flex items-center group">
@@ -739,8 +736,7 @@ function MessagesTab({ friends, loading, onOpenConvo, onRefresh }: {
                 );
               })}
             </div>
-        }
-      </div>
+      }
     </div>
   );
 }
@@ -856,7 +852,7 @@ function Tog({ enabled, onChange, label, hint }: { enabled: boolean; onChange: (
     <div className="flex items-center justify-between gap-3 py-0.5">
       <div className="min-w-0"><div className="text-sm text-white/70">{label}</div>{hint && <div className="text-xs text-white/30">{hint}</div>}</div>
       <button type="button" onClick={() => onChange(!enabled)} className={`relative shrink-0 w-10 h-5 rounded-full transition-colors duration-200 ${enabled ? 'bg-green' : 'bg-white/10'}`}>
-        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-[#ffffff] shadow-sm transition-transform duration-200 ${enabled ? 'translate-x-5' : 'translate-x-0'}`} />
       </button>
     </div>
   );
