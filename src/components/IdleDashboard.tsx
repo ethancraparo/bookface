@@ -1,10 +1,10 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
-import { signOut } from 'next-auth/react';
-import Link from 'next/link';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useSession, signOut } from 'next-auth/react';
 import ThemeSelector from './ThemeSelector';
 import TagSelector from './TagSelector';
-import { Friend } from '@/types';
+import { io, Socket } from 'socket.io-client';
+import { Friend, DMMessage } from '@/types';
 
 type Tab = 'match' | 'friends' | 'messages' | 'profile';
 
@@ -19,6 +19,8 @@ export default function IdleDashboard({ handle, selectedTags, setSelectedTags, s
   const [tab, setTab] = useState<Tab>('match');
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendsLoading, setFriendsLoading] = useState(true);
+  // null = list view, string = conversation open for that userId
+  const [openConvoId, setOpenConvoId] = useState<string | null>(null);
 
   const refreshFriends = useCallback(() => {
     fetch('/api/friends')
@@ -30,6 +32,17 @@ export default function IdleDashboard({ handle, selectedTags, setSelectedTags, s
   }, []);
 
   useEffect(() => { refreshFriends(); }, [refreshFriends]);
+
+  // When a convo closes, refresh unread counts
+  function handleCloseConvo() {
+    setOpenConvoId(null);
+    refreshFriends();
+  }
+
+  function openConvo(userId: string, targetTab: Tab) {
+    setTab(targetTab);
+    setOpenConvoId(userId);
+  }
 
   const pendingCount = friends.filter((f) => f.status === 'PENDING' && !f.iRequested).length;
   const unreadCount  = friends.reduce((n, f) => n + (f.unreadCount ?? 0), 0);
@@ -52,15 +65,6 @@ export default function IdleDashboard({ handle, selectedTags, setSelectedTags, s
         <div className="flex items-center gap-1.5">
           {handle && <span className="text-sm text-white/40 font-mono mr-1">@{handle}</span>}
           <ThemeSelector />
-          <button
-            onClick={() => signOut({ callbackUrl: '/' })}
-            title="Sign out"
-            className="w-8 h-8 rounded-full glass flex items-center justify-center text-white/30 hover:text-danger transition-colors"
-          >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
-          </button>
         </div>
       </header>
 
@@ -69,11 +73,9 @@ export default function IdleDashboard({ handle, selectedTags, setSelectedTags, s
         {tabs.map(({ id, label, badge }) => (
           <button
             key={id}
-            onClick={() => setTab(id)}
+            onClick={() => { setTab(id); setOpenConvoId(null); }}
             className={`relative px-4 py-3 text-sm font-medium transition-all border-b-2 -mb-px ${
-              tab === id
-                ? 'text-white border-green'
-                : 'text-white/40 border-transparent hover:text-white/70'
+              tab === id ? 'text-white border-green' : 'text-white/40 border-transparent hover:text-white/70'
             }`}
           >
             {label}
@@ -87,11 +89,186 @@ export default function IdleDashboard({ handle, selectedTags, setSelectedTags, s
       </div>
 
       {/* ── Tab content ── */}
-      <div className="flex-1 overflow-y-auto">
-        {tab === 'match'    && <MatchTab selectedTags={selectedTags} setSelectedTags={setSelectedTags} startMatching={startMatching} handle={handle} />}
-        {tab === 'friends'  && <FriendsTab friends={friends} loading={friendsLoading} onRefresh={refreshFriends} />}
-        {tab === 'messages' && <MessagesTab friends={friends.filter((f) => f.status === 'ACCEPTED')} loading={friendsLoading} />}
-        {tab === 'profile'  && <ProfileTab />}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+
+        {/* Conversation view — overlays whichever tab is active */}
+        {openConvoId && (
+          <ConversationView
+            friendId={openConvoId}
+            onBack={handleCloseConvo}
+          />
+        )}
+
+        {!openConvoId && tab === 'match'    && <MatchTab selectedTags={selectedTags} setSelectedTags={setSelectedTags} startMatching={startMatching} handle={handle} />}
+        {!openConvoId && tab === 'friends'  && <FriendsTab friends={friends} loading={friendsLoading} onRefresh={refreshFriends} onOpenConvo={(id) => openConvo(id, 'messages')} />}
+        {!openConvoId && tab === 'messages' && <MessagesTab friends={friends.filter((f) => f.status === 'ACCEPTED')} loading={friendsLoading} onOpenConvo={(id) => openConvo(id, 'messages')} />}
+        {!openConvoId && tab === 'profile'  && <ProfileTab />}
+      </div>
+    </div>
+  );
+}
+
+// ── Inline conversation view ───────────────────────────────────────────────────
+
+interface FriendInfo {
+  id: string;
+  handle: string | null;
+  bio: string | null;
+  isVerifiedDev: boolean;
+}
+
+function ConversationView({ friendId, onBack }: { friendId: string; onBack: () => void }) {
+  const { data: session, status } = useSession();
+  const [messages, setMessages] = useState<DMMessage[]>([]);
+  const [friend, setFriend] = useState<FriendInfo | null>(null);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(true);
+  const socketRef = useRef<Socket | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Load history
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    fetch(`/api/messages/${friendId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data || data.error) return;
+        setFriend(data.friend);
+        setMessages(data.messages);
+        setLoading(false);
+      });
+  }, [status, friendId]);
+
+  // Socket.io DM connection
+  useEffect(() => {
+    if (status !== 'authenticated' || !session?.user?.id) return;
+    const socket = io('/dm', { path: '/socket.io' });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      socket.emit('register', session.user.id);
+      socket.emit('mark_read', { fromUserId: friendId });
+    });
+    socket.on('message', (msg: DMMessage) => {
+      if (msg.senderId === friendId) {
+        setMessages((prev) => [...prev, msg]);
+        socket.emit('mark_read', { fromUserId: friendId });
+      }
+    });
+    socket.on('message_sent', (msg: DMMessage) => {
+      setMessages((prev) => [...prev, msg]);
+    });
+
+    return () => { socket.disconnect(); };
+  }, [status, session?.user?.id, friendId]);
+
+  // Scroll to bottom
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  function send() {
+    const text = input.trim();
+    if (!text || !socketRef.current) return;
+    socketRef.current.emit('send_message', { toUserId: friendId, content: text });
+    setInput('');
+  }
+
+  function handleKey(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  }
+
+  const myId = session?.user?.id;
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Convo header with back button */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.08] shrink-0">
+        <button
+          onClick={onBack}
+          className="w-8 h-8 rounded-full glass flex items-center justify-center text-white/50 hover:text-white transition-colors shrink-0"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        {friend && (
+          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${friend.isVerifiedDev ? 'bg-green/15 border border-green/30 text-green' : 'bg-white/[0.08] border border-white/10 text-white/60'}`}>
+              {friend.handle ? friend.handle[0].toUpperCase() : '?'}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white leading-none">
+                {friend.handle ? `@${friend.handle}` : 'Anonymous'}
+                {friend.isVerifiedDev && <span className="ml-1.5 text-[10px] text-green font-mono">verified dev ✓</span>}
+              </p>
+              {friend.bio && <p className="text-xs text-white/35 mt-0.5 truncate">{friend.bio}</p>}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+        {loading ? (
+          <div className="flex justify-center pt-12">
+            <div className="w-6 h-6 rounded-full border-2 border-green border-t-transparent animate-spin" />
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="text-center pt-12">
+            <p className="text-white/25 text-sm">No messages yet.</p>
+            <p className="text-white/20 text-xs mt-1">Say hi to {friend?.handle ? `@${friend.handle}` : 'your new friend'}!</p>
+          </div>
+        ) : (
+          <>
+            {messages.map((m, i) => {
+              const fromMe = m.senderId === myId;
+              const showDate = i === 0 || new Date(m.createdAt).getTime() - new Date(messages[i - 1].createdAt).getTime() > 300_000;
+              return (
+                <div key={m.id}>
+                  {showDate && (
+                    <p className="text-center text-[11px] text-white/20 my-3">{fmtDate(m.createdAt)}</p>
+                  )}
+                  <div className={`flex ${fromMe ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[75%] px-4 py-2.5 text-sm leading-relaxed ${
+                      fromMe
+                        ? 'bg-green text-white rounded-[18px] rounded-br-[5px]'
+                        : 'glass text-white/90 rounded-[18px] rounded-bl-[5px]'
+                    }`}>
+                      {m.content}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={bottomRef} />
+          </>
+        )}
+      </div>
+
+      {/* Input */}
+      <div className="px-4 pb-4 pt-2 shrink-0 border-t border-white/[0.08]">
+        <div className="flex items-end gap-2 glass rounded-3xl px-4 py-3">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder="Message…"
+            rows={1}
+            className="flex-1 bg-transparent text-sm text-white placeholder:text-white/25 focus:outline-none resize-none max-h-32"
+            style={{ lineHeight: '1.5' }}
+          />
+          <button
+            onClick={send}
+            disabled={!input.trim()}
+            className="w-8 h-8 rounded-full bg-green flex items-center justify-center shrink-0 shadow-green-glow disabled:opacity-30 transition-opacity"
+          >
+            <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/>
+            </svg>
+          </button>
+        </div>
+        <p className="text-center text-[11px] text-white/15 mt-2">Enter to send · Shift+Enter for new line</p>
       </div>
     </div>
   );
@@ -113,7 +290,6 @@ function MatchTab({ selectedTags, setSelectedTags, startMatching, handle }: {
         </h1>
         <p className="text-white/45 text-[15px]">Random video chat for vibe coders</p>
       </div>
-
       <div className="w-full max-w-md glass rounded-3xl p-6 shadow-glass space-y-5">
         <div>
           <p className="text-sm font-medium text-white/60 mb-3">
@@ -128,11 +304,9 @@ function MatchTab({ selectedTags, setSelectedTags, startMatching, handle }: {
           Find a match →
         </button>
       </div>
-
       {!handle && (
         <p className="text-sm text-white/30">
-          <Link href="/profile" className="text-green hover:underline">Set up your profile</Link>
-          {' '}so you're ready when you connect
+          Go to <button onClick={() => {}} className="text-green hover:underline">Profile</button> to set up your profile before you connect
         </p>
       )}
     </div>
@@ -141,10 +315,11 @@ function MatchTab({ selectedTags, setSelectedTags, startMatching, handle }: {
 
 // ── Friends tab ───────────────────────────────────────────────────────────────
 
-function FriendsTab({ friends, loading, onRefresh }: {
+function FriendsTab({ friends, loading, onRefresh, onOpenConvo }: {
   friends: Friend[];
   loading: boolean;
   onRefresh: () => void;
+  onOpenConvo: (userId: string) => void;
 }) {
   const accepted = friends.filter((f) => f.status === 'ACCEPTED');
   const incoming = friends.filter((f) => f.status === 'PENDING' && !f.iRequested);
@@ -163,7 +338,6 @@ function FriendsTab({ friends, loading, onRefresh }: {
 
   return (
     <div className="max-w-lg mx-auto px-6 py-6 space-y-5">
-
       {/* Incoming requests */}
       {incoming.length > 0 && (
         <section className="glass rounded-3xl p-5 shadow-glass space-y-3">
@@ -196,7 +370,11 @@ function FriendsTab({ friends, loading, onRefresh }: {
         )}
 
         {accepted.map((f) => (
-          <Link key={f.id} href={`/messages/${f.userId}`} className="flex items-center gap-3 rounded-2xl hover:bg-white/5 -mx-2 px-2 py-2 transition-all group">
+          <button
+            key={f.id}
+            onClick={() => onOpenConvo(f.userId)}
+            className="w-full flex items-center gap-3 rounded-2xl hover:bg-white/5 -mx-2 px-2 py-2 transition-all group text-left"
+          >
             <FriendAvatar handle={f.handle} isVerifiedDev={f.isVerifiedDev} />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-white group-hover:text-green transition-colors">
@@ -218,7 +396,7 @@ function FriendsTab({ friends, loading, onRefresh }: {
                 <path d="M9 18l6-6-6-6"/>
               </svg>
             </div>
-          </Link>
+          </button>
         ))}
 
         {outgoing.map((f) => (
@@ -238,7 +416,11 @@ function FriendsTab({ friends, loading, onRefresh }: {
 
 // ── Messages tab ──────────────────────────────────────────────────────────────
 
-function MessagesTab({ friends, loading }: { friends: Friend[]; loading: boolean }) {
+function MessagesTab({ friends, loading, onOpenConvo }: {
+  friends: Friend[];
+  loading: boolean;
+  onOpenConvo: (userId: string) => void;
+}) {
   if (loading) return <TabSpinner />;
 
   const sorted = [...friends].sort((a, b) => {
@@ -258,7 +440,11 @@ function MessagesTab({ friends, loading }: { friends: Friend[]; loading: boolean
         ) : (
           <div className="divide-y divide-white/[0.06]">
             {sorted.map((f) => (
-              <Link key={f.id} href={`/messages/${f.userId}`} className="flex items-center gap-3 px-5 py-4 hover:bg-white/[0.04] transition-all group">
+              <button
+                key={f.id}
+                onClick={() => onOpenConvo(f.userId)}
+                className="w-full flex items-center gap-3 px-5 py-4 hover:bg-white/[0.04] transition-all group text-left"
+              >
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${f.isVerifiedDev ? 'bg-green/15 border border-green/30 text-green' : 'bg-white/[0.08] border border-white/10 text-white/60'}`}>
                   {f.handle ? f.handle[0].toUpperCase() : '?'}
                 </div>
@@ -283,7 +469,7 @@ function MessagesTab({ friends, loading }: { friends: Friend[]; loading: boolean
                 {(f.unreadCount ?? 0) > 0 && (
                   <span className="w-5 h-5 rounded-full bg-green text-white text-[10px] font-bold flex items-center justify-center shrink-0">{f.unreadCount}</span>
                 )}
-              </Link>
+              </button>
             ))}
           </div>
         )}
@@ -351,10 +537,8 @@ function ProfileTab() {
   return (
     <form onSubmit={handleSave} className="max-w-4xl mx-auto px-6 py-6 space-y-5">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
         {/* Left column */}
         <div className="space-y-5">
-          {/* Identity */}
           <section className="glass rounded-3xl p-6 shadow-glass space-y-5">
             <SectionLabel>Identity</SectionLabel>
             <ProfileField label="Handle *">
@@ -378,7 +562,6 @@ function ProfileTab() {
             </ProfileField>
           </section>
 
-          {/* Links */}
           <section className="glass rounded-3xl p-6 shadow-glass space-y-4">
             <SectionLabel>Links</SectionLabel>
             <ProfileField label="GitHub">
@@ -395,7 +578,6 @@ function ProfileTab() {
 
         {/* Right column */}
         <div className="space-y-5">
-          {/* Reveal settings */}
           <section className="glass rounded-3xl p-6 shadow-glass space-y-4">
             <div>
               <SectionLabel>Reveal settings</SectionLabel>
@@ -410,7 +592,6 @@ function ProfileTab() {
             </div>
           </section>
 
-          {/* Interests */}
           <section className="glass rounded-3xl p-6 shadow-glass space-y-4">
             <div>
               <SectionLabel>Interests</SectionLabel>
@@ -421,9 +602,9 @@ function ProfileTab() {
         </div>
       </div>
 
-      {/* Save row */}
-      <div className="flex items-center justify-between gap-4 pt-1 pb-4">
-        <div>
+      {/* Save + sign out row */}
+      <div className="flex items-center justify-between gap-4 pb-4">
+        <div className="flex items-center gap-3">
           {error && (
             <p className="text-danger text-sm flex items-center gap-1.5">
               <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -433,22 +614,31 @@ function ProfileTab() {
           {success && (
             <p className="text-green text-sm flex items-center gap-1.5">
               <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Profile saved
+              Saved
             </p>
           )}
         </div>
-        <button
-          type="submit" disabled={loading}
-          className="bg-green text-white font-semibold rounded-2xl px-8 py-2.5 text-sm hover:bg-green-dim transition-all disabled:opacity-50 shadow-green-glow shrink-0"
-        >
-          {loading ? 'Saving…' : 'Save profile'}
-        </button>
+        <div className="flex items-center gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => signOut({ callbackUrl: '/' })}
+            className="bg-danger/15 border border-danger/30 text-danger font-semibold rounded-2xl px-6 py-2.5 text-sm hover:bg-danger/25 transition-all"
+          >
+            Sign out
+          </button>
+          <button
+            type="submit" disabled={loading}
+            className="bg-green text-white font-semibold rounded-2xl px-8 py-2.5 text-sm hover:bg-green-dim transition-all disabled:opacity-50 shadow-green-glow"
+          >
+            {loading ? 'Saving…' : 'Save profile'}
+          </button>
+        </div>
       </div>
     </form>
   );
 }
 
-// ── Shared sub-components ─────────────────────────────────────────────────────
+// ── Shared helpers ────────────────────────────────────────────────────────────
 
 function TabSpinner() {
   return (
@@ -502,4 +692,11 @@ function fmtTime(iso: string) {
   if (diff < 3_600_000)  return `${Math.floor(diff / 60_000)}m`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function fmtDate(iso: string) {
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  if (diff < 86_400_000) return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
