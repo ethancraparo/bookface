@@ -2,16 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme variables ──────────────────────────────────── */
+:root,
+:root[data-theme="dark"] {
+  --fg:          245 245 247;   /* foreground text   #f5f5f7 */
+  --bg:          9   9   9;     /* base background   #090909 */
+  --bg-surface:  17  17  17;   /* card surface      #111111 */
+  --bg-elevated: 26  26  26;   /* elevated layer    #1a1a1a */
+}
+
+:root[data-theme="grey"] {
+  --fg:          245 245 247;
+  --bg:          28  28  30;   /* macOS graphite    #1c1c1e */
+  --bg-surface:  44  44  46;   /*                   #2c2c2e */
+  --bg-elevated: 58  58  60;   /*                   #3a3a3c */
+}
+
+:root[data-theme="light"] {
+  --fg:          28  28  30;   /* near-black text   #1c1c1e */
+  --bg:          242 242 247;  /* iOS light bg      #f2f2f7 */
+  --bg-surface:  255 255 255;  /* white card        #ffffff */
+  --bg-elevated: 229 229 234;  /* light grey        #e5e5ea */
+}
+
 /* ── Base ─────────────────────────────────────────────── */
 html,
 body {
   height: 100%;
-  color: #f5f5f7;
-  background-color: #070710;
-  /* Subtle macOS-style gradient — deep indigo corners */
-  background-image:
-    radial-gradient(ellipse 90% 50% at 15% 0%,   rgba(99,102,241,0.14) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 50% at 85% 100%,  rgba(139,92,246,0.09) 0%, transparent 55%);
+  color: rgb(var(--fg));
+  background-color: rgb(var(--bg));
   background-attachment: fixed;
 }
 
@@ -26,25 +45,25 @@ body {
 /* ── Glass utility ────────────────────────────────────── */
 @layer utilities {
   .glass {
-    background: rgba(255, 255, 255, 0.07);
+    background: rgb(var(--fg) / 0.07);
     backdrop-filter: blur(24px) saturate(1.8);
     -webkit-backdrop-filter: blur(24px) saturate(1.8);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgb(var(--fg) / 0.12);
   }
   .glass-sm {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgb(var(--fg) / 0.05);
     backdrop-filter: blur(12px) saturate(1.6);
     -webkit-backdrop-filter: blur(12px) saturate(1.6);
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    border: 1px solid rgb(var(--fg) / 0.10);
   }
   .glass-heavy {
-    background: rgba(255, 255, 255, 0.10);
+    background: rgb(var(--fg) / 0.10);
     backdrop-filter: blur(40px) saturate(2);
     -webkit-backdrop-filter: blur(40px) saturate(2);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid rgb(var(--fg) / 0.14);
   }
   .inset-highlight {
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 1px 0 rgb(var(--fg) / 0.10);
   }
 }
 

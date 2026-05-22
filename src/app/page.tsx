@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import ThemeSelector from '@/components/ThemeSelector';
 
 const TERMINAL_LINES = [
   '> initializing bookface...',
@@ -48,9 +49,18 @@ function LockIcon() {
 }
 
 export default function LandingPage() {
-  const { data: session } = useSession();
+  const { data: rawSession, status } = useSession();
+  // In dev bypass mode the landing page should always look logged-out
+  const session = process.env.NEXT_PUBLIC_DEV_BYPASS === '1' ? null : rawSession;
   const router = useRouter();
   const [termLine, setTermLine] = useState(0);
+
+  // Already signed in — skip the landing page entirely
+  // (Skip in dev bypass mode so the landing page is previewable locally)
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_DEV_BYPASS === '1') return;
+    if (status === 'authenticated') router.replace('/match');
+  }, [status, router]);
   const [displayedText, setDisplayedText] = useState('');
   const [charIdx, setCharIdx] = useState(0);
 
@@ -74,7 +84,7 @@ export default function LandingPage() {
   }, [termLine, charIdx]);
 
   function handleStart() {
-    router.push(session ? '/match' : '/auth/signin');
+    router.push(session ? '/match' : '/auth/signup');
   }
 
   return (
@@ -83,6 +93,7 @@ export default function LandingPage() {
       <nav className="flex items-center justify-between px-5 py-3 glass border-b border-white/[0.08]">
         <span className="text-base font-bold tracking-tight text-white">book<span className="text-green">face</span></span>
         <div className="flex items-center gap-2">
+          <ThemeSelector />
           {session ? (
             <>
               <Link href="/profile" className="text-sm text-white/50 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition-all">

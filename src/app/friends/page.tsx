@@ -64,7 +64,7 @@ export default function FriendsPage() {
             {incoming.length > 0 && (
               <section className="glass rounded-3xl p-5 shadow-glass space-y-3">
                 <h2 className="text-xs font-semibold text-white/35 uppercase tracking-widest">
-                  Friend requests <span className="text-blue ml-1">{incoming.length}</span>
+                  Friend requests <span className="text-white/70 ml-1">{incoming.length}</span>
                 </h2>
                 {incoming.map((f) => (
                   <div key={f.id} className="flex items-center gap-3">

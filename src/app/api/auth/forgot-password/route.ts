@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       to: email,
       subject: 'Reset your bookface password',
       html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px; background: #070710; color: #f5f5f7;">
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px; background: #090909; color: #f5f5f7;">
           <h1 style="font-size: 28px; font-weight: 800; margin: 0 0 8px;">book<span style="color: #30d158;">face</span></h1>
           <p style="color: #98989f; margin: 0 0 32px; font-size: 14px;">Random video chat for vibe coders</p>
 

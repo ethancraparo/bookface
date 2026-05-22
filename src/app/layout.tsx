@@ -12,7 +12,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <body className="font-sans text-text-primary min-h-screen">
+      <head>
+        {/* Apply theme before first paint to prevent flash */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('bf-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();` }} />
+      </head>
+      <body className="font-sans min-h-screen">
         <Providers>{children}</Providers>
       </body>
     </html>

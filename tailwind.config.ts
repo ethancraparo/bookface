@@ -10,14 +10,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Base backgrounds
-        base:     '#070710',
-        surface:  '#0f0f1a',
-        elevated: '#161625',
+        // Base backgrounds — driven by CSS variables (theme-aware)
+        base:     'rgb(var(--bg))',
+        surface:  'rgb(var(--bg-surface))',
+        elevated: 'rgb(var(--bg-elevated))',
+        // white = foreground color, switches dark↔light automatically
+        // All text-white/XX and bg-white/XX variants inherit the theme
+        white:    'rgb(var(--fg) / <alpha-value>)',
         // Borders
-        border: '#ffffff1f',        // white/12
+        border: 'rgb(var(--fg) / 0.12)',
         // Text
-        'text-primary':   '#f5f5f7',
+        'text-primary':   'rgb(var(--fg))',
         'text-muted':     '#98989f',
         'text-dim':       '#48484a',
         // Accents — Apple system palette
@@ -27,9 +30,9 @@ const config: Config = {
           glow:    '#30d15820',
         },
         blue: {
-          DEFAULT: '#0a84ff',
-          dim:     '#0070e0',
-          glow:    '#0a84ff20',
+          DEFAULT: '#f5f5f7',
+          dim:     '#98989f',
+          glow:    'rgba(255,255,255,0.08)',
         },
         cyan: {
           DEFAULT: '#32ade6',
@@ -91,7 +94,7 @@ const config: Config = {
         'glass':      '0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)',
         'glass-lg':   '0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.10)',
         'green-glow': '0 0 30px rgba(48,209,88,0.25)',
-        'blue-glow':  '0 0 30px rgba(10,132,255,0.25)',
+        'blue-glow':  '0 0 30px rgba(255,255,255,0.12)',
       },
     },
   },
