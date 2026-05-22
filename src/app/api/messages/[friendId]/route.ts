@@ -3,6 +3,36 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+// DELETE /api/messages/[friendId] — delete entire thread between me and friendId
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ friendId: string }> }) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const me = session.user.id;
+  const { friendId } = await params;
+
+  const friendship = await prisma.friendship.findFirst({
+    where: {
+      status: 'ACCEPTED',
+      OR: [
+        { requesterId: me, addresseeId: friendId },
+        { requesterId: friendId, addresseeId: me },
+      ],
+    },
+  });
+  if (!friendship) return NextResponse.json({ error: 'Not friends' }, { status: 403 });
+
+  await prisma.directMessage.deleteMany({
+    where: {
+      OR: [
+        { senderId: me, receiverId: friendId },
+        { senderId: friendId, receiverId: me },
+      ],
+    },
+  });
+
+  return NextResponse.json({ ok: true });
+}
+
 // GET /api/messages/[friendId] — fetch conversation history (last 100 messages)
 export async function GET(req: NextRequest, { params }: { params: Promise<{ friendId: string }> }) {
   const session = await getServerSession(authOptions);

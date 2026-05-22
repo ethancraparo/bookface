@@ -2,6 +2,7 @@ import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 import next from 'next';
 import { PrismaClient } from '@prisma/client';
+import { onlineUsers } from './src/lib/presence';
 
 const prisma = new PrismaClient();
 const dev = process.env.NODE_ENV !== 'production';
@@ -320,6 +321,7 @@ app.prepare().then(() => {
     socket.on('register', (userId: string) => {
       registeredUserId = userId;
       dmUserSockets.set(userId, socket.id);
+      onlineUsers.add(userId);
     });
 
     socket.on('send_message', async ({ toUserId, content }: { toUserId: string; content: string }) => {
@@ -368,7 +370,10 @@ app.prepare().then(() => {
     });
 
     socket.on('disconnect', () => {
-      if (registeredUserId) dmUserSockets.delete(registeredUserId);
+      if (registeredUserId) {
+        dmUserSockets.delete(registeredUserId);
+        onlineUsers.delete(registeredUserId);
+      }
     });
   });
 

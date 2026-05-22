@@ -42,13 +42,24 @@ export default function RightPanel({
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendsLoading, setFriendsLoading] = useState(true);
   const [openConvoId, setOpenConvoId] = useState<string | null>(null);
+  const [openProfileId, setOpenProfileId] = useState<string | null>(null);
+  const [onlineSet, setOnlineSet] = useState<Set<string>>(new Set());
 
   const refreshFriends = useCallback(() => {
     fetch('/api/friends')
       .then((r) => r.json())
       .then((data: Friend[]) => {
-        setFriends(Array.isArray(data) ? data : []);
+        const list: Friend[] = Array.isArray(data) ? data : [];
+        setFriends(list);
         setFriendsLoading(false);
+        // Fetch presence for accepted friends
+        const acceptedIds = list.filter((f) => f.status === 'ACCEPTED').map((f) => f.userId);
+        if (acceptedIds.length > 0) {
+          fetch(`/api/presence?ids=${acceptedIds.join(',')}`)
+            .then((r) => r.json())
+            .then((online: string[]) => setOnlineSet(new Set(online)))
+            .catch(() => {});
+        }
       });
   }, []);
 
@@ -66,7 +77,7 @@ export default function RightPanel({
 
   // Reset to friends when session ends
   useEffect(() => {
-    if (!sessionActive) { setTab('friends'); setOpenConvoId(null); }
+    if (!sessionActive) { setTab('friends'); setOpenConvoId(null); setOpenProfileId(null); }
   }, [sessionActive]);
 
   const pendingCount = friends.filter((f) => f.status === 'PENDING' && !f.iRequested).length;
@@ -81,7 +92,7 @@ export default function RightPanel({
   ];
   const visibleTabs = tabDefs.filter((t) => !t.onlyActive || sessionActive);
 
-  function switchTab(id: RightTab) { setTab(id); setOpenConvoId(null); }
+  function switchTab(id: RightTab) { setTab(id); setOpenConvoId(null); setOpenProfileId(null); }
 
   return (
     <div className="h-full flex flex-col overflow-hidden border-l border-white/[0.06]">
@@ -127,28 +138,40 @@ export default function RightPanel({
         )}
 
         {/* Friends tab */}
-        {tab === 'friends' && !openConvoId && (
+        {tab === 'friends' && !openConvoId && !openProfileId && (
           <FriendsTab
             friends={friends}
             loading={friendsLoading}
+            onlineSet={onlineSet}
             onRefresh={refreshFriends}
-            onOpenConvo={(id) => setOpenConvoId(id)}
+            onOpenProfile={(id) => setOpenProfileId(id)}
           />
         )}
 
         {/* Messages tab */}
-        {tab === 'messages' && !openConvoId && (
+        {tab === 'messages' && !openConvoId && !openProfileId && (
           <MessagesTab
             friends={friends.filter((f) => f.status === 'ACCEPTED')}
             loading={friendsLoading}
             onOpenConvo={(id) => setOpenConvoId(id)}
+            onRefresh={refreshFriends}
           />
         )}
 
         {/* Profile tab */}
-        {tab === 'profile' && <ProfileTab />}
+        {tab === 'profile' && !openConvoId && !openProfileId && <ProfileTab />}
 
-        {/* Inline conversation — overlays Friends/Messages content */}
+        {/* Friend profile view — overlays Friends tab */}
+        {openProfileId && !openConvoId && (
+          <FriendProfileView
+            userId={openProfileId}
+            isOnline={onlineSet.has(openProfileId)}
+            onBack={() => setOpenProfileId(null)}
+            onMessage={() => { setOpenConvoId(openProfileId); setOpenProfileId(null); }}
+          />
+        )}
+
+        {/* Inline conversation — from Messages tab or friend profile */}
         {openConvoId && tab !== 'chat' && (
           <ConversationView
             friendId={openConvoId}
@@ -302,6 +325,140 @@ function RevealIdentityPanel({ identity, onClose }: { identity: RevealedIdentity
   );
 }
 
+// ── Friend profile view ───────────────────────────────────────────────────────
+
+interface FriendProfile {
+  handle: string | null;
+  bio: string | null;
+  githubUrl: string | null;
+  twitterUrl: string | null;
+  contactEmail: string | null;
+  isVerifiedDev: boolean;
+}
+
+function FriendProfileView({ userId, isOnline, onBack, onMessage }: {
+  userId: string;
+  isOnline: boolean;
+  onBack: () => void;
+  onMessage: () => void;
+}) {
+  const [profile, setProfile] = useState<FriendProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/profile/${userId}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.error) { setError(true); } else { setProfile(d); } setLoading(false); });
+  }, [userId]);
+
+  const hasAnyInfo = profile && (profile.handle || profile.bio || profile.githubUrl || profile.twitterUrl || profile.contactEmail);
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.08] shrink-0">
+        <button onClick={onBack} className="w-8 h-8 rounded-full glass flex items-center justify-center text-white/50 hover:text-white transition-colors shrink-0">
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+        </button>
+        <span className="text-sm font-medium text-white/60">Friend profile</span>
+      </div>
+
+      {loading ? <Spinner /> : error ? (
+        <div className="flex-1 flex items-center justify-center p-6">
+          <p className="text-white/30 text-sm text-center">Could not load profile.</p>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Avatar + name card */}
+          <div className="glass rounded-2xl p-5 flex items-center gap-4">
+            <div className="relative shrink-0">
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-bold ${profile?.isVerifiedDev ? 'bg-green/15 border border-green/30 text-green' : 'bg-white/[0.08] border border-white/10 text-white/60'}`}>
+                {profile?.handle ? profile.handle[0].toUpperCase() : '?'}
+              </div>
+              {isOnline && (
+                <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-green border-2 border-[#0d0d0d]" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-base font-semibold text-white leading-tight">
+                  {profile?.handle ? `@${profile.handle}` : 'Anonymous'}
+                </p>
+                {profile?.isVerifiedDev && (
+                  <span className="text-[10px] text-green font-mono border border-green/30 rounded-full px-2 py-0.5 shrink-0">verified dev ✓</span>
+                )}
+              </div>
+              <p className={`text-xs mt-1 ${isOnline ? 'text-green' : 'text-white/30'}`}>
+                {isOnline ? '● online' : '○ offline'}
+              </p>
+            </div>
+          </div>
+
+          {/* Bio */}
+          {profile?.bio && (
+            <div className="glass rounded-2xl p-4">
+              <Label>Bio</Label>
+              <p className="text-sm text-white/70 leading-relaxed mt-2">{profile.bio}</p>
+            </div>
+          )}
+
+          {/* Links */}
+          {(profile?.githubUrl || profile?.twitterUrl || profile?.contactEmail) && (
+            <div className="glass rounded-2xl p-4 space-y-3">
+              <Label>Links</Label>
+              {profile?.githubUrl && (
+                <a href={profile.githubUrl} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors group">
+                  <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:border-white/20 transition-colors">
+                    <GithubIcon />
+                  </div>
+                  <span className="truncate">{profile.githubUrl.replace('https://', '')}</span>
+                </a>
+              )}
+              {profile?.twitterUrl && (
+                <a href={profile.twitterUrl} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors group">
+                  <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:border-white/20 transition-colors text-xs">
+                    𝕏
+                  </div>
+                  <span className="truncate">{profile.twitterUrl.replace('https://', '')}</span>
+                </a>
+              )}
+              {profile?.contactEmail && (
+                <a href={`mailto:${profile.contactEmail}`}
+                  className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors group">
+                  <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:border-white/20 transition-colors text-xs">
+                    ✉
+                  </div>
+                  <span className="truncate">{profile.contactEmail}</span>
+                </a>
+              )}
+            </div>
+          )}
+
+          {!hasAnyInfo && (
+            <div className="glass rounded-2xl p-4 text-center">
+              <p className="text-white/25 text-sm">They haven't shared any details.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Message button */}
+      {!loading && !error && (
+        <div className="p-3 border-t border-white/[0.08] shrink-0">
+          <button onClick={onMessage}
+            className="w-full py-3 rounded-2xl bg-green text-white font-semibold text-sm hover:bg-green-dim transition-all shadow-green-glow flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Message
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Inline DM conversation ────────────────────────────────────────────────────
 
 function ConversationView({ friendId, onBack }: { friendId: string; onBack: () => void }) {
@@ -310,6 +467,7 @@ function ConversationView({ friendId, onBack }: { friendId: string; onBack: () =
   const [friend, setFriend] = useState<{ handle: string | null; bio: string | null; isVerifiedDev: boolean } | null>(null);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
+  const [deletingMsgId, setDeletingMsgId] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -342,6 +500,12 @@ function ConversationView({ friendId, onBack }: { friendId: string; onBack: () =
     setInput('');
   }
 
+  async function deleteMsg(id: string) {
+    await fetch(`/api/messages/msg/${id}`, { method: 'DELETE' });
+    setMsgs((p) => p.filter((m) => m.id !== id));
+    setDeletingMsgId(null);
+  }
+
   const myId = session?.user?.id;
 
   return (
@@ -363,24 +527,45 @@ function ConversationView({ friendId, onBack }: { friendId: string; onBack: () =
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-        {loading ? <div className="flex justify-center pt-12"><div className="w-6 h-6 rounded-full border-2 border-green border-t-transparent animate-spin" /></div>
-          : msgs.length === 0 ? <div className="text-center pt-12"><p className="text-white/25 text-sm">No messages yet — say hi!</p></div>
-          : <>
-            {msgs.map((m, i) => {
-              const fromMe = m.senderId === myId;
-              const showDate = i === 0 || new Date(m.createdAt).getTime() - new Date(msgs[i - 1].createdAt).getTime() > 300_000;
-              return (
-                <div key={m.id}>
-                  {showDate && <p className="text-center text-[11px] text-white/20 my-3">{fmtDate(m.createdAt)}</p>}
-                  <div className={`flex ${fromMe ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[75%] px-4 py-2.5 text-sm leading-relaxed ${fromMe ? 'bg-green text-white rounded-[18px] rounded-br-[5px]' : 'glass text-white/90 rounded-[18px] rounded-bl-[5px]'}`}>{m.content}</div>
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
+        {loading
+          ? <div className="flex justify-center pt-12"><div className="w-6 h-6 rounded-full border-2 border-green border-t-transparent animate-spin" /></div>
+          : msgs.length === 0
+            ? <div className="text-center pt-12"><p className="text-white/25 text-sm">No messages yet — say hi!</p></div>
+            : <>
+              {msgs.map((m, i) => {
+                const fromMe = m.senderId === myId;
+                const showDate = i === 0 || new Date(m.createdAt).getTime() - new Date(msgs[i - 1].createdAt).getTime() > 300_000;
+                const isConfirming = deletingMsgId === m.id;
+                return (
+                  <div key={m.id}>
+                    {showDate && <p className="text-center text-[11px] text-white/20 my-3">{fmtDate(m.createdAt)}</p>}
+                    <div className={`flex items-end gap-1.5 group ${fromMe ? 'justify-end' : 'justify-start'}`}>
+                      {/* Delete button — own messages only, appears on hover */}
+                      {fromMe && (
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mb-0.5">
+                          {isConfirming ? (
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => setDeletingMsgId(null)} className="text-[10px] text-white/40 hover:text-white transition-colors px-1">Cancel</button>
+                              <button onClick={() => deleteMsg(m.id)} className="text-[10px] text-danger hover:text-red-400 transition-colors font-medium px-1">Delete</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setDeletingMsgId(m.id)}
+                              className="w-5 h-5 rounded-md flex items-center justify-center text-white/25 hover:text-danger hover:bg-danger/10 transition-all">
+                              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      <div className={`max-w-[75%] px-4 py-2.5 text-sm leading-relaxed ${fromMe ? 'bg-green text-white rounded-[18px] rounded-br-[5px]' : 'glass text-white/90 rounded-[18px] rounded-bl-[5px]'}`}>
+                        {m.content}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-            <div ref={bottomRef} />
-          </>
+                );
+              })}
+              <div ref={bottomRef} />
+            </>
         }
       </div>
 
@@ -398,12 +583,24 @@ function ConversationView({ friendId, onBack }: { friendId: string; onBack: () =
 
 // ── Friends tab ───────────────────────────────────────────────────────────────
 
-function FriendsTab({ friends, loading, onRefresh, onOpenConvo }: {
-  friends: Friend[]; loading: boolean; onRefresh: () => void; onOpenConvo: (id: string) => void;
+function FriendsTab({ friends, loading, onlineSet, onRefresh, onOpenProfile }: {
+  friends: Friend[];
+  loading: boolean;
+  onlineSet: Set<string>;
+  onRefresh: () => void;
+  onOpenProfile: (userId: string) => void;
 }) {
   const accepted = friends.filter((f) => f.status === 'ACCEPTED');
   const incoming = friends.filter((f) => f.status === 'PENDING' && !f.iRequested);
   const outgoing = friends.filter((f) => f.status === 'PENDING' && f.iRequested);
+
+  // Sort: online first, then alphabetical by handle
+  const sorted = [...accepted].sort((a, b) => {
+    const aOnline = onlineSet.has(a.userId) ? 0 : 1;
+    const bOnline = onlineSet.has(b.userId) ? 0 : 1;
+    if (aOnline !== bOnline) return aOnline - bOnline;
+    return (a.handle ?? '').localeCompare(b.handle ?? '');
+  });
 
   async function accept(id: string) { await fetch(`/api/friends/${id}`, { method: 'PATCH' }); onRefresh(); }
   async function decline(id: string) { await fetch(`/api/friends/${id}`, { method: 'DELETE' }); onRefresh(); }
@@ -412,13 +609,17 @@ function FriendsTab({ friends, loading, onRefresh, onOpenConvo }: {
 
   return (
     <div className="px-4 py-4 space-y-4">
+      {/* Incoming requests */}
       {incoming.length > 0 && (
         <section className="glass rounded-2xl p-4 space-y-3">
           <Label>Requests <span className="text-white/60 ml-1">{incoming.length}</span></Label>
           {incoming.map((f) => (
             <div key={f.id} className="flex items-center gap-3">
               <Avatar handle={f.handle} v={f.isVerifiedDev} />
-              <div className="flex-1 min-w-0"><p className="text-sm font-medium text-white">{f.handle ? `@${f.handle}` : 'Anonymous'}</p>{f.bio && <p className="text-xs text-white/40 truncate">{f.bio}</p>}</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white">{f.handle ? `@${f.handle}` : 'Anonymous'}</p>
+                {f.bio && <p className="text-xs text-white/40 truncate">{f.bio}</p>}
+              </div>
               <div className="flex gap-1.5 shrink-0">
                 <button onClick={() => decline(f.id)} className="px-2.5 py-1 rounded-lg text-xs text-white/50 hover:text-white hover:bg-white/10 transition-all">Decline</button>
                 <button onClick={() => accept(f.id)} className="px-2.5 py-1 rounded-lg text-xs bg-green text-white font-medium hover:bg-green-dim transition-all">Accept</button>
@@ -427,27 +628,51 @@ function FriendsTab({ friends, loading, onRefresh, onOpenConvo }: {
           ))}
         </section>
       )}
+
+      {/* Friends list */}
       <section className="glass rounded-2xl p-4 space-y-1">
         <Label>Friends <span className="text-white/30 ml-1">{accepted.length}</span></Label>
-        {accepted.length === 0 && outgoing.length === 0 && <div className="text-center py-6"><p className="text-white/25 text-sm">No friends yet.</p><p className="text-white/20 text-xs mt-1">Reveal during a match to connect.</p></div>}
-        {accepted.map((f) => (
-          <button key={f.id} onClick={() => onOpenConvo(f.userId)} className="w-full flex items-center gap-3 rounded-xl hover:bg-white/5 -mx-1 px-1 py-2 transition-all group text-left">
+        {accepted.length === 0 && outgoing.length === 0 && (
+          <div className="text-center py-6">
+            <p className="text-white/25 text-sm">No friends yet.</p>
+            <p className="text-white/20 text-xs mt-1">Reveal during a match to connect.</p>
+          </div>
+        )}
+        {sorted.map((f) => {
+          const isOnline = onlineSet.has(f.userId);
+          return (
+            <button key={f.id} onClick={() => onOpenProfile(f.userId)}
+              className="w-full flex items-center gap-3 rounded-xl hover:bg-white/5 -mx-1 px-1 py-2.5 transition-all group text-left">
+              {/* Avatar with online dot */}
+              <div className="relative shrink-0">
+                <Avatar handle={f.handle} v={f.isVerifiedDev} />
+                {isOnline && (
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green border-2 border-[#0d0d0d]" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white group-hover:text-green transition-colors leading-tight">
+                  {f.handle ? `@${f.handle}` : 'Anonymous'}
+                  {f.isVerifiedDev && <span className="ml-1.5 text-[10px] text-green/70 font-mono">✓</span>}
+                </p>
+                <p className={`text-xs mt-0.5 ${isOnline ? 'text-green/70' : 'text-white/25'}`}>
+                  {isOnline ? 'online' : 'offline'}
+                </p>
+              </div>
+              <svg className="w-3.5 h-3.5 text-white/20 group-hover:text-white/50 transition-colors shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          );
+        })}
+
+        {/* Pending outgoing */}
+        {outgoing.map((f) => (
+          <div key={f.id} className="flex items-center gap-3 opacity-50 px-1 py-2.5">
             <Avatar handle={f.handle} v={f.isVerifiedDev} />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white group-hover:text-green transition-colors">{f.handle ? `@${f.handle}` : 'Anonymous'}</p>
-              {f.lastMessage ? <p className="text-xs text-white/40 truncate">{f.lastMessage.senderId !== f.userId ? 'You: ' : ''}{f.lastMessage.content}</p> : <p className="text-xs text-white/25">No messages yet</p>}
+              <p className="text-sm font-medium text-white">{f.handle ? `@${f.handle}` : 'Anonymous'}</p>
+              <p className="text-xs text-white/40 mt-0.5">Request pending</p>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {(f.unreadCount ?? 0) > 0 && <span className="w-4 h-4 rounded-full bg-green text-white text-[9px] font-bold flex items-center justify-center">{f.unreadCount}</span>}
-              <svg className="w-3.5 h-3.5 text-white/20 group-hover:text-white/50 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-            </div>
-          </button>
-        ))}
-        {outgoing.map((f) => (
-          <div key={f.id} className="flex items-center gap-3 opacity-50">
-            <Avatar handle={f.handle} v={f.isVerifiedDev} />
-            <div className="flex-1 min-w-0"><p className="text-sm font-medium text-white">{f.handle ? `@${f.handle}` : 'Anonymous'}</p><p className="text-xs text-white/40">Request sent</p></div>
-            <button onClick={() => decline(f.id)} className="text-xs text-white/30 hover:text-danger transition-colors px-1">Cancel</button>
+            <button onClick={() => decline(f.id)} className="text-xs text-white/30 hover:text-danger transition-colors px-1 shrink-0">Cancel</button>
           </div>
         ))}
       </section>
@@ -457,9 +682,17 @@ function FriendsTab({ friends, loading, onRefresh, onOpenConvo }: {
 
 // ── Messages tab ──────────────────────────────────────────────────────────────
 
-function MessagesTab({ friends, loading, onOpenConvo }: {
-  friends: Friend[]; loading: boolean; onOpenConvo: (id: string) => void;
+function MessagesTab({ friends, loading, onOpenConvo, onRefresh }: {
+  friends: Friend[]; loading: boolean; onOpenConvo: (id: string) => void; onRefresh: () => void;
 }) {
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  async function deleteThread(userId: string) {
+    await fetch(`/api/messages/${userId}`, { method: 'DELETE' });
+    setConfirmDeleteId(null);
+    onRefresh();
+  }
+
   if (loading) return <Spinner />;
   const sorted = [...friends].sort((a, b) => {
     const ta = a.lastMessage ? new Date(a.lastMessage.createdAt).getTime() : 0;
@@ -472,19 +705,39 @@ function MessagesTab({ friends, loading, onOpenConvo }: {
         {sorted.length === 0
           ? <div className="text-center py-10 px-4"><p className="text-white/25 text-sm">No messages yet.</p><p className="text-white/20 text-xs mt-1">Reveal during a match to add friends.</p></div>
           : <div className="divide-y divide-white/[0.06]">
-              {sorted.map((f) => (
-                <button key={f.id} onClick={() => onOpenConvo(f.userId)} className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-white/[0.04] transition-all group text-left">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${f.isVerifiedDev ? 'bg-green/15 border border-green/30 text-green' : 'bg-white/[0.08] border border-white/10 text-white/60'}`}>{f.handle ? f.handle[0].toUpperCase() : '?'}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className={`text-sm font-medium ${(f.unreadCount ?? 0) > 0 ? 'text-white' : 'text-white/80'}`}>{f.handle ? `@${f.handle}` : 'Anonymous'}</p>
-                      {f.lastMessage && <span className="text-[11px] text-white/25 shrink-0">{fmtTime(f.lastMessage.createdAt)}</span>}
+              {sorted.map((f) => {
+                const isConfirming = confirmDeleteId === f.userId;
+                return (
+                  <div key={f.id} className="flex items-center group">
+                    <button onClick={() => onOpenConvo(f.userId)} className="flex-1 flex items-center gap-3 px-4 py-3.5 hover:bg-white/[0.04] transition-all text-left min-w-0">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${f.isVerifiedDev ? 'bg-green/15 border border-green/30 text-green' : 'bg-white/[0.08] border border-white/10 text-white/60'}`}>{f.handle ? f.handle[0].toUpperCase() : '?'}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className={`text-sm font-medium ${(f.unreadCount ?? 0) > 0 ? 'text-white' : 'text-white/80'}`}>{f.handle ? `@${f.handle}` : 'Anonymous'}</p>
+                          {f.lastMessage && <span className="text-[11px] text-white/25 shrink-0">{fmtTime(f.lastMessage.createdAt)}</span>}
+                        </div>
+                        {f.lastMessage ? <p className={`text-xs truncate ${(f.unreadCount ?? 0) > 0 ? 'text-white/60 font-medium' : 'text-white/35'}`}>{f.lastMessage.senderId !== f.userId ? 'You: ' : ''}{f.lastMessage.content}</p> : <p className="text-xs text-white/25">No messages yet</p>}
+                      </div>
+                      {(f.unreadCount ?? 0) > 0 && <span className="w-4 h-4 rounded-full bg-green text-white text-[9px] font-bold flex items-center justify-center shrink-0">{f.unreadCount}</span>}
+                    </button>
+
+                    {/* Delete thread control */}
+                    <div className="pr-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {isConfirming ? (
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => setConfirmDeleteId(null)} className="text-[10px] text-white/40 hover:text-white transition-colors px-1.5 py-1">Cancel</button>
+                          <button onClick={() => deleteThread(f.userId)} className="text-[10px] text-danger hover:text-red-400 font-medium transition-colors px-1.5 py-1">Delete</button>
+                        </div>
+                      ) : (
+                        <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(f.userId); }}
+                          className="w-6 h-6 rounded-lg flex items-center justify-center text-white/25 hover:text-danger hover:bg-danger/10 transition-all">
+                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                        </button>
+                      )}
                     </div>
-                    {f.lastMessage ? <p className={`text-xs truncate ${(f.unreadCount ?? 0) > 0 ? 'text-white/60 font-medium' : 'text-white/35'}`}>{f.lastMessage.senderId !== f.userId ? 'You: ' : ''}{f.lastMessage.content}</p> : <p className="text-xs text-white/25">No messages yet</p>}
                   </div>
-                  {(f.unreadCount ?? 0) > 0 && <span className="w-4 h-4 rounded-full bg-green text-white text-[9px] font-bold flex items-center justify-center shrink-0">{f.unreadCount}</span>}
-                </button>
-              ))}
+                );
+              })}
             </div>
         }
       </div>
