@@ -1,35 +1,45 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 
-const SIZES = [
-  { w: 240, h: 160 },
-  { w: 360, h: 240 },
-  { w: 480, h: 320 },
-];
-const MARGIN = 12;
+const ASPECT   = 16 / 9;
+const MIN_W    = 140;
+const MARGIN   = 12;
+const DEFAULT_W = 240;
+const DEFAULT_H = Math.round(DEFAULT_W / ASPECT);
+
+type Corner = 'tl' | 'tr' | 'bl' | 'br';
 
 interface Props {
-  localStream: MediaStream | null;
-  remoteStream: MediaStream | null;
-  isVideoOff: boolean;
-  isAudioMuted: boolean;
+  localStream:    MediaStream | null;
+  remoteStream:   MediaStream | null;
+  isVideoOff:     boolean;
+  isAudioMuted:   boolean;
   isScreenSharing?: boolean;
 }
 
 export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAudioMuted, isScreenSharing }: Props) {
-  const localRef = useRef<HTMLVideoElement>(null);
-  const remoteRef = useRef<HTMLVideoElement>(null);
+  const localRef     = useRef<HTMLVideoElement>(null);
+  const remoteRef    = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const [sizeIdx, setSizeIdx] = useState(0);
-  const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null);
+  const [pipPos,  setPipPos]  = useState<{ x: number; y: number } | null>(null);
+  const [pipSize, setPipSize] = useState({ w: DEFAULT_W, h: DEFAULT_H });
   const [remoteIsWide, setRemoteIsWide] = useState(false);
-  const isDragging = useRef(false);
-  const dragOffset = useRef({ x: 0, y: 0 });
-  const didDrag = useRef(false);
 
-  const PIP_W = SIZES[sizeIdx].w;
-  const PIP_H = SIZES[sizeIdx].h;
+  // Keep refs in sync so mouse handlers have fresh values without re-registering
+  const pipPosRef  = useRef(pipPos);
+  const pipSizeRef = useRef(pipSize);
+  pipPosRef.current  = pipPos;
+  pipSizeRef.current = pipSize;
+
+  // Drag state
+  const isDragging  = useRef(false);
+  const dragOffset  = useRef({ x: 0, y: 0 });
+
+  // Resize state
+  const isResizing    = useRef(false);
+  const resizeCorner  = useRef<Corner | null>(null);
+  const resizeStart   = useRef({ mouseX: 0, mouseY: 0, x: 0, y: 0, w: 0, h: 0 });
 
   useEffect(() => {
     if (localRef.current && localStream) localRef.current.srcObject = localStream;
@@ -40,47 +50,75 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
     remoteRef.current.srcObject = remoteStream;
     const vid = remoteRef.current;
     const onMeta = () => {
-      if (vid.videoWidth && vid.videoHeight) {
-        setRemoteIsWide(vid.videoWidth / vid.videoHeight > 1.9);
-      }
+      if (vid.videoWidth && vid.videoHeight) setRemoteIsWide(vid.videoWidth / vid.videoHeight > 1.9);
     };
     vid.addEventListener('loadedmetadata', onMeta);
-    // also re-check when tracks change mid-session (screen share start/stop)
-    remoteStream.getVideoTracks().forEach((t) => {
-      t.addEventListener('ended', () => setRemoteIsWide(false));
-    });
+    remoteStream.getVideoTracks().forEach((t) => t.addEventListener('ended', () => setRemoteIsWide(false)));
     return () => vid.removeEventListener('loadedmetadata', onMeta);
   }, [remoteStream]);
 
-  // Clamp position when size changes
-  useEffect(() => {
-    if (!pipPos || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    setPipPos({
-      x: Math.max(MARGIN, Math.min(rect.width - PIP_W - MARGIN, pipPos.x)),
-      y: Math.max(MARGIN, Math.min(rect.height - PIP_H - MARGIN, pipPos.y)),
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sizeIdx]);
-
   useEffect(() => {
     function onMouseMove(e: MouseEvent) {
-      if (!isDragging.current || !containerRef.current) return;
-      didDrag.current = true;
-      const rect = containerRef.current.getBoundingClientRect();
-      setPipPos({
-        x: Math.max(MARGIN, Math.min(rect.width - PIP_W - MARGIN, e.clientX - rect.left - dragOffset.current.x)),
-        y: Math.max(MARGIN, Math.min(rect.height - PIP_H - MARGIN, e.clientY - rect.top - dragOffset.current.y)),
-      });
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      // — Drag —
+      if (isDragging.current) {
+        const { w, h } = pipSizeRef.current;
+        setPipPos({
+          x: Math.max(MARGIN, Math.min(rect.width  - w - MARGIN, e.clientX - rect.left - dragOffset.current.x)),
+          y: Math.max(MARGIN, Math.min(rect.height - h - MARGIN, e.clientY - rect.top  - dragOffset.current.y)),
+        });
+      }
+
+      // — Resize —
+      if (isResizing.current && resizeCorner.current) {
+        const { mouseX, mouseY, x: sx, y: sy, w: sw, h: sh } = resizeStart.current;
+        const corner = resizeCorner.current;
+        const dx = e.clientX - mouseX;
+        const maxW = rect.width * 0.75;
+
+        let newW: number, newX: number, newY: number;
+
+        if (corner === 'br' || corner === 'tr') {
+          newW = Math.max(MIN_W, Math.min(maxW, sw + dx));
+          newX = sx;
+        } else { // bl | tl — dragging left shrinks/grows from right
+          newW = Math.max(MIN_W, Math.min(maxW, sw - dx));
+          newX = sx + sw - newW;
+        }
+
+        const newH = newW / ASPECT;
+
+        if (corner === 'br' || corner === 'bl') {
+          newY = sy;                  // top edge is fixed
+        } else {                      // tr | tl — bottom edge fixed
+          newY = sy + sh - newH;
+        }
+
+        // Clamp inside container
+        newX = Math.max(MARGIN, Math.min(rect.width  - newW - MARGIN, newX));
+        newY = Math.max(MARGIN, Math.min(rect.height - newH - MARGIN, newY));
+
+        setPipSize({ w: Math.round(newW), h: Math.round(newH) });
+        setPipPos({ x: newX, y: newY });
+      }
     }
-    function onMouseUp() { isDragging.current = false; }
+
+    function onMouseUp() {
+      isDragging.current  = false;
+      isResizing.current  = false;
+      resizeCorner.current = null;
+      document.body.style.cursor = '';
+    }
+
     window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('mouseup',   onMouseUp);
     return () => {
       window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('mouseup',   onMouseUp);
     };
-  }, [PIP_W, PIP_H]);
+  }, []);
 
   function handlePipMouseDown(e: React.MouseEvent<HTMLDivElement>) {
     if (!containerRef.current) return;
@@ -88,49 +126,67 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
     const pRect = e.currentTarget.getBoundingClientRect();
     setPipPos({ x: pRect.left - cRect.left, y: pRect.top - cRect.top });
     isDragging.current = true;
-    didDrag.current = false;
     dragOffset.current = { x: e.clientX - pRect.left, y: e.clientY - pRect.top };
+    document.body.style.cursor = 'grabbing';
     e.preventDefault();
   }
 
+  function handleCornerMouseDown(corner: Corner, e: React.MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!containerRef.current) return;
+    const cRect = containerRef.current.getBoundingClientRect();
+    const pRect = (e.currentTarget as HTMLElement).parentElement!.getBoundingClientRect();
+    isResizing.current   = true;
+    resizeCorner.current = corner;
+    resizeStart.current  = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      x:      pRect.left - cRect.left,
+      y:      pRect.top  - cRect.top,
+      w:      pRect.width,
+      h:      pRect.height,
+    };
+    setPipPos({ x: pRect.left - cRect.left, y: pRect.top - cRect.top });
+    const cursors: Record<Corner, string> = { tl: 'nw-resize', tr: 'ne-resize', bl: 'sw-resize', br: 'se-resize' };
+    document.body.style.cursor = cursors[corner];
+  }
+
   const pipStyle: React.CSSProperties = pipPos
-    ? { left: pipPos.x, top: pipPos.y, width: PIP_W, height: PIP_H }
-    : { right: MARGIN, bottom: MARGIN, width: PIP_W, height: PIP_H };
+    ? { left: pipPos.x,  top:    pipPos.y,    width: pipSize.w, height: pipSize.h }
+    : { right: MARGIN,   bottom: MARGIN,       width: pipSize.w, height: pipSize.h };
+
+  const corners: { corner: Corner; pos: string; cursor: string }[] = [
+    { corner: 'tl', pos: 'top-0 left-0',     cursor: 'cursor-nw-resize' },
+    { corner: 'tr', pos: 'top-0 right-0',    cursor: 'cursor-ne-resize' },
+    { corner: 'bl', pos: 'bottom-0 left-0',  cursor: 'cursor-sw-resize' },
+    { corner: 'br', pos: 'bottom-0 right-0', cursor: 'cursor-se-resize' },
+  ];
 
   return (
     <div ref={containerRef} className="relative flex-1 bg-black rounded-xl overflow-hidden select-none">
       {/* Remote video */}
       {remoteStream ? (
-        <video
-          ref={remoteRef}
-          autoPlay
-          playsInline
-          className={`w-full h-full ${remoteIsWide ? 'object-contain bg-black' : 'object-cover'}`}
-        />
+        <video ref={remoteRef} autoPlay playsInline
+          className={`w-full h-full ${remoteIsWide ? 'object-contain bg-black' : 'object-cover'}`} />
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-black">
           <div className="text-center space-y-3">
-            <div className="w-16 h-16 rounded-full glass mx-auto flex items-center justify-center text-2xl">
-              👤
-            </div>
+            <div className="w-16 h-16 rounded-full glass mx-auto flex items-center justify-center text-2xl">👤</div>
             <p className="text-white/30 text-sm">Connecting…</p>
           </div>
         </div>
       )}
 
-      {/* Local video — draggable PiP */}
+      {/* Local video — draggable + resizable PiP */}
       <div
         onMouseDown={handlePipMouseDown}
         style={pipStyle}
-        className="absolute rounded-2xl overflow-hidden border border-white/20 shadow-glass bg-black cursor-grab active:cursor-grabbing group"
+        className="absolute rounded-2xl overflow-hidden border border-white/20 shadow-glass bg-black cursor-grab active:cursor-grabbing"
       >
-        <video
-          ref={localRef}
-          autoPlay
-          playsInline
-          muted
-          className={`w-full h-full object-cover scale-x-[-1]${isVideoOff || !localStream ? ' hidden' : ''}`}
-        />
+        <video ref={localRef} autoPlay playsInline muted
+          className={`w-full h-full object-cover scale-x-[-1]${isVideoOff || !localStream ? ' hidden' : ''}`} />
+
         {(isVideoOff || !localStream) && (
           <div className="absolute inset-0 flex items-center justify-center bg-elevated">
             <span className="text-2xl">🚫</span>
@@ -141,22 +197,20 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
             <span className="text-xs font-mono text-green bg-black/70 px-2 py-1 rounded">screen</span>
           </div>
         )}
-
-        {/* Expand button — cycles through sizes */}
-        <button
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={() => setSizeIdx((i) => (i + 1) % SIZES.length)}
-          className="absolute top-1 right-1 w-6 h-6 rounded bg-black/60 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
-          title={sizeIdx === SIZES.length - 1 ? 'shrink' : 'expand'}
-        >
-          {sizeIdx === SIZES.length - 1 ? '–' : '+'}
-        </button>
-
-        <div className="absolute bottom-1 left-1 flex gap-1">
-          {isAudioMuted && (
+        {isAudioMuted && (
+          <div className="absolute bottom-1 left-1">
             <span className="bg-danger rounded-full w-3.5 h-3.5 flex items-center justify-center text-[8px]">🔇</span>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Corner resize handles — invisible hit-targets only */}
+        {corners.map(({ corner, pos, cursor }) => (
+          <div
+            key={corner}
+            onMouseDown={(e) => handleCornerMouseDown(corner, e)}
+            className={`absolute w-6 h-6 ${pos} ${cursor} z-10`}
+          />
+        ))}
       </div>
     </div>
   );

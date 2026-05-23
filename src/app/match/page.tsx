@@ -81,6 +81,8 @@ function LiveView({ userId, handle }: { userId: string; handle?: string }) {
   } = useMatch({ userId });
 
   const [splitPercent, setSplitPercent] = useState(50);
+  const [dividerDragging, setDividerDragging] = useState(false);
+  const [dividerHovered, setDividerHovered] = useState(false);
   const isDividerDragging = useRef(false);
   const splitContainerRef = useRef<HTMLDivElement>(null);
   const [overlay, setOverlay] = useState<OverlayKind>('none');
@@ -107,7 +109,12 @@ function LiveView({ userId, handle }: { userId: string; handle?: string }) {
       const pct = ((e.clientX - rect.left) / rect.width) * 100;
       setSplitPercent(Math.max(20, Math.min(75, pct)));
     }
-    function onMouseUp() { isDividerDragging.current = false; }
+    function onMouseUp() {
+      isDividerDragging.current = false;
+      setDividerDragging(false);
+      setDividerHovered(false);
+      document.body.style.cursor = '';
+    }
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
     return () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); };
@@ -205,8 +212,14 @@ function LiveView({ userId, handle }: { userId: string; handle?: string }) {
 
         {/* ── Resizable divider ── */}
         <div
-          onMouseDown={() => { isDividerDragging.current = true; }}
-          className="w-1 shrink-0 bg-white/[0.05] hover:bg-green/30 cursor-col-resize transition-colors select-none"
+          onMouseEnter={() => setDividerHovered(true)}
+          onMouseLeave={() => setDividerHovered(false)}
+          onMouseDown={() => {
+            isDividerDragging.current = true;
+            setDividerDragging(true);
+            document.body.style.cursor = 'col-resize';
+          }}
+          className={`w-1 shrink-0 cursor-col-resize select-none ${dividerDragging ? 'bg-green/60' : dividerHovered ? 'bg-green/30' : 'bg-white/[0.05]'}`}
         />
 
         {/* ── Right column — always-visible RightPanel ── */}
@@ -239,6 +252,8 @@ const DEMO_MESSAGES = [
 function DemoView({ handle }: { handle?: string }) {
   const [splitPercent, setSplitPercent] = useState(50);
   const [overlay, setOverlay] = useState<OverlayKind>('none');
+  const [dividerDragging, setDividerDragging] = useState(false);
+  const [dividerHovered, setDividerHovered] = useState(false);
   const isDividerDragging = useRef(false);
   const splitContainerRef = useRef<HTMLDivElement>(null);
 
@@ -248,7 +263,12 @@ function DemoView({ handle }: { handle?: string }) {
       const rect = splitContainerRef.current.getBoundingClientRect();
       setSplitPercent(Math.max(20, Math.min(75, ((e.clientX - rect.left) / rect.width) * 100)));
     }
-    function onMouseUp() { isDividerDragging.current = false; }
+    function onMouseUp() {
+      isDividerDragging.current = false;
+      setDividerDragging(false);
+      setDividerHovered(false);
+      document.body.style.cursor = '';
+    }
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
     return () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); };
@@ -273,7 +293,16 @@ function DemoView({ handle }: { handle?: string }) {
             />
           </div>
         </div>
-        <div onMouseDown={() => { isDividerDragging.current = true; }} className="w-1 shrink-0 bg-white/[0.05] hover:bg-green/30 cursor-col-resize transition-colors select-none" />
+        <div
+          onMouseEnter={() => setDividerHovered(true)}
+          onMouseLeave={() => setDividerHovered(false)}
+          onMouseDown={() => {
+            isDividerDragging.current = true;
+            setDividerDragging(true);
+            document.body.style.cursor = 'col-resize';
+          }}
+          className={`w-1 shrink-0 cursor-col-resize select-none ${dividerDragging ? 'bg-green/60' : dividerHovered ? 'bg-green/30' : 'bg-white/[0.05]'}`}
+        />
         <div className="flex-1 min-w-0 overflow-hidden">
           <RightPanel
             sessionActive={true}

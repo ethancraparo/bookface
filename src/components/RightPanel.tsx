@@ -15,7 +15,7 @@ export type OverlayKind =
   | 'reveal-incoming'
   | 'reveal-identity';
 
-type RightTab = 'chat' | 'friends' | 'messages' | 'profile';
+type RightTab = 'chat' | 'friends' | 'messages' | 'notifs' | 'profile';
 
 interface Props {
   // Session state
@@ -46,6 +46,16 @@ export default function RightPanel({
   const [onlineSet, setOnlineSet] = useState<Set<string>>(new Set());
 
   const refreshFriends = useCallback(() => {
+    if (process.env.NEXT_PUBLIC_DEV_BYPASS === '1') {
+      const DEV_FRIENDS: Friend[] = [
+        { id:'f1', userId:'u1', handle:'joshcodes', bio:'Building a Rust HTTP server from scratch', isVerifiedDev:true, status:'ACCEPTED', iRequested:false, lastMessage:{ id:'m3', senderId:'u1', content:'dude you have to try bun', createdAt:new Date(Date.now()-120000).toISOString(), read:true }, unreadCount:0 },
+        { id:'f2', userId:'u2', handle:'sophiabuilds', bio:'AI/ML + Next.js. always building.', isVerifiedDev:false, status:'ACCEPTED', iRequested:true, lastMessage:{ id:'m8', senderId:'u2', content:'btw are you going to that hackathon?', createdAt:new Date(Date.now()-30000).toISOString(), read:false }, unreadCount:2 },
+      ];
+      setFriends(DEV_FRIENDS);
+      setOnlineSet(new Set(['u1']));
+      setFriendsLoading(false);
+      return;
+    }
     fetch('/api/friends')
       .then((r) => r.json())
       .then((data: Friend[]) => {
@@ -86,8 +96,9 @@ export default function RightPanel({
   type TabDef = { id: RightTab; label: string; badge?: number; onlyActive?: boolean };
   const tabDefs: TabDef[] = [
     { id: 'chat',     label: 'Chat',     onlyActive: true },
-    { id: 'friends',  label: 'Friends',  badge: pendingCount || undefined },
+    { id: 'friends',  label: 'Friends' },
     { id: 'messages', label: 'Messages', badge: unreadCount  || undefined },
+    { id: 'notifs',   label: 'Notifs',   badge: pendingCount || undefined },
     { id: 'profile',  label: 'Profile' },
   ];
   const visibleTabs = tabDefs.filter((t) => !t.onlyActive || sessionActive);
@@ -110,9 +121,7 @@ export default function RightPanel({
           >
             {label}
             {badge != null && (
-              <span className="absolute top-1.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-green text-white text-[9px] font-bold flex items-center justify-center px-0.5">
-                {badge}
-              </span>
+              <span className="absolute top-2 -right-0.5 w-2 h-2 rounded-full bg-green" />
             )}
           </button>
         ))}
@@ -131,6 +140,7 @@ export default function RightPanel({
                 onRespondToReveal={onRespondToReveal}
                 onReportUser={onReportUser}
                 onDismissReveal={onDismissReveal}
+                sessionMessages={messages}
               />
             : <div className="h-full flex flex-col">
                 <ChatPanel messages={messages} onSend={onSend} />
@@ -154,6 +164,14 @@ export default function RightPanel({
             friends={friends.filter((f) => f.status === 'ACCEPTED')}
             loading={friendsLoading}
             onOpenConvo={(id) => setOpenConvoId(id)}
+            onRefresh={refreshFriends}
+          />
+        )}
+
+        {/* Notifs tab */}
+        {tab === 'notifs' && !openConvoId && !openProfileId && (
+          <NotifsTab
+            friends={friends}
             onRefresh={refreshFriends}
           />
         )}
@@ -185,18 +203,19 @@ export default function RightPanel({
 
 // ── Overlay content (reveal / report panels inside the Chat tab) ──────────────
 
-function OverlayContent({ overlay, onClear, revealedIdentity, onRespondToReveal, onReportUser, onDismissReveal }: {
+function OverlayContent({ overlay, onClear, revealedIdentity, onRespondToReveal, onReportUser, onDismissReveal, sessionMessages }: {
   overlay: OverlayKind;
   onClear: () => void;
   revealedIdentity: RevealedIdentity | null;
   onRespondToReveal: (a: boolean) => void;
   onReportUser: (cat: ReportCategory) => void;
   onDismissReveal: () => void;
+  sessionMessages: ChatMessage[];
 }) {
   if (overlay === 'report')          return <ReportPanel onReport={onReportUser} onClose={onClear} />;
   if (overlay === 'reveal-outgoing') return <RevealOutgoingPanel onBack={onClear} />;
   if (overlay === 'reveal-incoming') return <RevealIncomingPanel onAccept={() => onRespondToReveal(true)} onDecline={() => { onRespondToReveal(false); onClear(); }} />;
-  if (overlay === 'reveal-identity' && revealedIdentity) return <RevealIdentityPanel identity={revealedIdentity} onClose={() => { onDismissReveal(); onClear(); }} />;
+  if (overlay === 'reveal-identity' && revealedIdentity) return <RevealIdentityPanel identity={revealedIdentity} sessionMessages={sessionMessages} onClose={() => { onDismissReveal(); onClear(); }} />;
   return null;
 }
 
@@ -283,15 +302,25 @@ function RevealIncomingPanel({ onAccept, onDecline }: { onAccept: () => void; on
   );
 }
 
-function RevealIdentityPanel({ identity, onClose }: { identity: RevealedIdentity; onClose: () => void }) {
+function RevealIdentityPanel({ identity, sessionMessages, onClose }: { identity: RevealedIdentity; sessionMessages: ChatMessage[]; onClose: () => void }) {
   const [friendStatus, setFriendStatus] = useState<'idle' | 'loading' | 'sent' | 'friends'>('idle');
 
   async function sendFriendRequest() {
     setFriendStatus('loading');
     const res = await fetch('/api/friends', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ addresseeId: identity.userId }) });
     const data = await res.json();
-    if (res.ok) setFriendStatus(data.status === 'ACCEPTED' ? 'friends' : 'sent');
-    else setFriendStatus(data.error === 'Already friends' ? 'friends' : 'sent');
+    const isNowFriends = res.ok ? data.status === 'ACCEPTED' : data.error === 'Already friends';
+
+    // Import session chat messages as DMs so the conversation isn't lost
+    if (sessionMessages.length > 0) {
+      fetch('/api/messages/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ friendId: identity.userId, messages: sessionMessages }),
+      }).catch(() => {});
+    }
+
+    setFriendStatus(isNowFriends ? 'friends' : 'sent');
   }
 
   return (
@@ -347,6 +376,16 @@ function FriendProfileView({ userId, isOnline, onBack, onMessage }: {
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_DEV_BYPASS === '1') {
+      const DEV_PROFILES: Record<string, FriendProfile> = {
+        u1: { handle:'joshcodes', bio:'Building a Rust HTTP server from scratch', githubUrl:'https://github.com/joshcodes', twitterUrl:null, contactEmail:null, isVerifiedDev:true },
+        u2: { handle:'sophiabuilds', bio:'AI/ML + Next.js. always building.', githubUrl:'https://github.com/sophiabuilds', twitterUrl:'https://x.com/sophiabuilds', contactEmail:null, isVerifiedDev:false },
+      };
+      const p = DEV_PROFILES[userId];
+      if (p) setProfile(p); else setError(true);
+      setLoading(false);
+      return;
+    }
     fetch(`/api/profile/${userId}`)
       .then((r) => r.json())
       .then((d) => { if (d.error) { setError(true); } else { setProfile(d); } setLoading(false); });
@@ -357,11 +396,11 @@ function FriendProfileView({ userId, isOnline, onBack, onMessage }: {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.08] shrink-0">
-        <button onClick={onBack} className="w-8 h-8 rounded-full glass flex items-center justify-center text-white/50 hover:text-white transition-colors shrink-0">
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+      <div className="flex items-center gap-1.5 px-4 pt-5 pb-2.5 shrink-0">
+        <button onClick={onBack} className="flex items-center gap-1.5 text-white/50 hover:text-white transition-colors">
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+          <span className="text-sm font-medium">Friend profile</span>
         </button>
-        <span className="text-sm font-medium text-white/60">Friend profile</span>
       </div>
 
       {loading ? <Spinner /> : error ? (
@@ -369,79 +408,81 @@ function FriendProfileView({ userId, isOnline, onBack, onMessage }: {
           <p className="text-white/30 text-sm text-center">Could not load profile.</p>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* Avatar + name card */}
-          <div className="glass rounded-2xl p-5 flex items-center gap-4">
-            <div className="relative shrink-0">
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-bold ${profile?.isVerifiedDev ? 'bg-green/15 border border-green/30 text-green' : 'bg-white/[0.08] border border-white/10 text-white/60'}`}>
-                {profile?.handle ? profile.handle[0].toUpperCase() : '?'}
-              </div>
-              {isOnline && (
-                <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-green border-2 border-[#0d0d0d]" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-base font-semibold text-white leading-tight">
-                  {profile?.handle ? `@${profile.handle}` : 'Anonymous'}
-                </p>
-                {profile?.isVerifiedDev && (
-                  <span className="text-[10px] text-green font-mono border border-green/30 rounded-full px-2 py-0.5 shrink-0">verified dev ✓</span>
+        <div className="flex-1 overflow-y-auto px-4 pt-2.5 pb-4">
+          <div className="glass rounded-2xl overflow-hidden">
+            {/* Avatar + name */}
+            <div className="p-5 flex items-center gap-4">
+              <div className="relative shrink-0">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-bold ${profile?.isVerifiedDev ? 'bg-green/15 border border-green/30 text-green' : 'bg-white/[0.08] border border-white/10 text-white/60'}`}>
+                  {profile?.handle ? profile.handle[0].toUpperCase() : '?'}
+                </div>
+                {isOnline && (
+                  <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-green border-2 border-[#0d0d0d]" />
                 )}
               </div>
-              <p className={`text-xs mt-1 ${isOnline ? 'text-green' : 'text-white/30'}`}>
-                {isOnline ? '● online' : '○ offline'}
-              </p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-base font-semibold text-white leading-tight">
+                    {profile?.handle ? `@${profile.handle}` : 'Anonymous'}
+                  </p>
+                  {profile?.isVerifiedDev && (
+                    <span className="text-[10px] text-green font-mono border border-green/30 rounded-full px-2 py-0.5 shrink-0">verified dev ✓</span>
+                  )}
+                </div>
+                <p className={`text-xs mt-1 ${isOnline ? 'text-green' : 'text-white/30'}`}>
+                  {isOnline ? '● online' : '○ offline'}
+                </p>
+              </div>
             </div>
+
+            {/* Bio */}
+            {profile?.bio && (
+              <div className="px-5 pb-4 border-t border-white/[0.06] pt-4">
+                <Label>Bio</Label>
+                <p className="text-sm text-white/70 leading-relaxed mt-2">{profile.bio}</p>
+              </div>
+            )}
+
+            {/* Links */}
+            {(profile?.githubUrl || profile?.twitterUrl || profile?.contactEmail) && (
+              <div className="px-5 pb-5 border-t border-white/[0.06] pt-4 space-y-3">
+                <Label>Links</Label>
+                {profile?.githubUrl && (
+                  <a href={profile.githubUrl} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors group">
+                    <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:border-white/20 transition-colors">
+                      <GithubIcon />
+                    </div>
+                    <span className="truncate">{profile.githubUrl.replace('https://', '')}</span>
+                  </a>
+                )}
+                {profile?.twitterUrl && (
+                  <a href={profile.twitterUrl} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors group">
+                    <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:border-white/20 transition-colors text-xs">
+                      𝕏
+                    </div>
+                    <span className="truncate">{profile.twitterUrl.replace('https://', '')}</span>
+                  </a>
+                )}
+                {profile?.contactEmail && (
+                  <a href={`mailto:${profile.contactEmail}`}
+                    className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors group">
+                    <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:border-white/20 transition-colors text-xs">
+                      ✉
+                    </div>
+                    <span className="truncate">{profile.contactEmail}</span>
+                  </a>
+                )}
+              </div>
+            )}
+
+            {!hasAnyInfo && (
+              <div className="px-5 pb-5 border-t border-white/[0.06] pt-4 text-center">
+                <p className="text-white/25 text-sm">They haven't shared any details.</p>
+              </div>
+            )}
           </div>
-
-          {/* Bio */}
-          {profile?.bio && (
-            <div className="glass rounded-2xl p-4">
-              <Label>Bio</Label>
-              <p className="text-sm text-white/70 leading-relaxed mt-2">{profile.bio}</p>
-            </div>
-          )}
-
-          {/* Links */}
-          {(profile?.githubUrl || profile?.twitterUrl || profile?.contactEmail) && (
-            <div className="glass rounded-2xl p-4 space-y-3">
-              <Label>Links</Label>
-              {profile?.githubUrl && (
-                <a href={profile.githubUrl} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors group">
-                  <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:border-white/20 transition-colors">
-                    <GithubIcon />
-                  </div>
-                  <span className="truncate">{profile.githubUrl.replace('https://', '')}</span>
-                </a>
-              )}
-              {profile?.twitterUrl && (
-                <a href={profile.twitterUrl} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors group">
-                  <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:border-white/20 transition-colors text-xs">
-                    𝕏
-                  </div>
-                  <span className="truncate">{profile.twitterUrl.replace('https://', '')}</span>
-                </a>
-              )}
-              {profile?.contactEmail && (
-                <a href={`mailto:${profile.contactEmail}`}
-                  className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors group">
-                  <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:border-white/20 transition-colors text-xs">
-                    ✉
-                  </div>
-                  <span className="truncate">{profile.contactEmail}</span>
-                </a>
-              )}
-            </div>
-          )}
-
-          {!hasAnyInfo && (
-            <div className="glass rounded-2xl p-4 text-center">
-              <p className="text-white/25 text-sm">They haven't shared any details.</p>
-            </div>
-          )}
         </div>
       )}
 
@@ -468,11 +509,24 @@ function ConversationView({ friendId, onBack }: { friendId: string; onBack: () =
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [deletingMsgId, setDeletingMsgId] = useState<string | null>(null);
+  const [confirmDeleteThread, setConfirmDeleteThread] = useState(false);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (status !== 'authenticated') return;
+    if (process.env.NEXT_PUBLIC_DEV_BYPASS === '1') {
+      const DEV_CONVOS: Record<string, { friend: { id:string; handle:string; bio:string; isVerifiedDev:boolean }; messages: DMMessage[] }> = {
+        u1: { friend:{ id:'u1', handle:'joshcodes', bio:'Building a Rust HTTP server from scratch', isVerifiedDev:true }, messages:[{ id:'m1', senderId:'u1', content:'yo that WebRTC matching idea is sick', createdAt:new Date(Date.now()-600000).toISOString(), read:true },{ id:'m2', senderId:'devuser', content:'right?? been working on it all week lol', createdAt:new Date(Date.now()-540000).toISOString(), read:true },{ id:'m3', senderId:'u1', content:'dude you have to try bun', createdAt:new Date(Date.now()-120000).toISOString(), read:true }] },
+        u2: { friend:{ id:'u2', handle:'sophiabuilds', bio:'AI/ML + Next.js. always building.', isVerifiedDev:false }, messages:[{ id:'m4', senderId:'u2', content:'just pushed the first version of my agent', createdAt:new Date(Date.now()-7200000).toISOString(), read:true },{ id:'m5', senderId:'u2', content:"it hallucinates but it's kinda charming", createdAt:new Date(Date.now()-7100000).toISOString(), read:true },{ id:'m6', senderId:'devuser', content:'lmk when you ship it!', createdAt:new Date(Date.now()-3600000).toISOString(), read:true },{ id:'m7', senderId:'u2', content:'will do 🚀', createdAt:new Date(Date.now()-60000).toISOString(), read:false },{ id:'m8', senderId:'u2', content:'btw are you going to that hackathon?', createdAt:new Date(Date.now()-30000).toISOString(), read:false }] },
+      };
+      const convo = DEV_CONVOS[friendId];
+      if (convo) { setFriend(convo.friend); setMsgs(convo.messages); }
+      setLoading(false);
+      return;
+    }
     fetch(`/api/messages/${friendId}`).then((r) => r.json()).then((data) => {
       if (!data || data.error) return;
       setFriend(data.friend);
@@ -506,26 +560,40 @@ function ConversationView({ friendId, onBack }: { friendId: string; onBack: () =
     setDeletingMsgId(null);
   }
 
+  async function deleteThread() {
+    await fetch(`/api/messages/${friendId}`, { method: 'DELETE' });
+    onBack();
+  }
+
   const myId = session?.user?.id;
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.08] shrink-0">
-        <button onClick={onBack} className="w-8 h-8 rounded-full glass flex items-center justify-center text-white/50 hover:text-white transition-colors shrink-0">
+      <div className="relative flex items-center px-4 pt-5 pb-2.5 shrink-0">
+        <button onClick={onBack} className="text-white/50 hover:text-white transition-colors shrink-0">
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
         </button>
         {friend && (
-          <div className="flex items-center gap-2.5 flex-1 min-w-0">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${friend.isVerifiedDev ? 'bg-green/15 border border-green/30 text-green' : 'bg-white/[0.08] border border-white/10 text-white/60'}`}>
-              {friend.handle ? friend.handle[0].toUpperCase() : '?'}
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-white leading-none">{friend.handle ? `@${friend.handle}` : 'Anonymous'}{friend.isVerifiedDev && <span className="ml-1.5 text-[10px] text-green font-mono">verified dev ✓</span>}</p>
-              {friend.bio && <p className="text-xs text-white/35 mt-0.5 truncate">{friend.bio}</p>}
-            </div>
+          <div className="absolute inset-x-0 flex items-center justify-center pointer-events-none px-12">
+            <p className="text-base font-semibold text-white leading-none truncate">
+              {friend.handle ? `@${friend.handle}` : 'Anonymous'}
+            </p>
           </div>
         )}
+        <button onClick={() => setConfirmDeleteThread((v) => !v)} className="ml-auto text-white/25 hover:text-danger transition-colors shrink-0">
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
       </div>
+
+      {confirmDeleteThread && (
+        <div className="mx-4 mb-1 px-3 py-2 glass rounded-xl flex items-center justify-between gap-2 shrink-0">
+          <p className="text-xs text-white/50">Delete this conversation?</p>
+          <div className="flex gap-2 shrink-0">
+            <button onClick={() => setConfirmDeleteThread(false)} className="text-xs text-white/40 hover:text-white transition-colors px-2 py-0.5">Cancel</button>
+            <button onClick={deleteThread} className="text-xs text-danger hover:text-red-400 font-medium transition-colors px-2 py-0.5">Delete</button>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
         {loading
@@ -569,13 +637,44 @@ function ConversationView({ friendId, onBack }: { friendId: string; onBack: () =
         }
       </div>
 
-      <div className="px-4 pb-4 pt-2 shrink-0 border-t border-white/[0.08]">
-        <div className="flex items-end gap-2 glass rounded-3xl px-4 py-3">
-          <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Message…" rows={1} className="flex-1 bg-transparent text-sm text-white placeholder:text-white/25 focus:outline-none resize-none max-h-32" style={{ lineHeight: '1.5' }} />
-          <button onClick={send} disabled={!input.trim()} className="w-8 h-8 rounded-full bg-green flex items-center justify-center shrink-0 shadow-green-glow disabled:opacity-30 transition-opacity">
-            <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+      <div className="border-t border-white/[0.08] shrink-0">
+        {attachments.length > 0 && (
+          <div className="px-3 pt-2.5 flex flex-wrap gap-1.5">
+            {attachments.map((f, i) => (
+              <div key={i} className="flex items-center gap-1.5 bg-white/[0.07] rounded-lg px-2.5 py-1 text-xs text-white/60 max-w-[160px]">
+                <span className="truncate">{f.name}</span>
+                <button type="button" onClick={() => setAttachments((a) => a.filter((_, j) => j !== i))} className="text-white/30 hover:text-white transition-colors shrink-0">✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <form onSubmit={(e) => { e.preventDefault(); send(); }} className="p-3 flex gap-2 items-center">
+          <input ref={fileRef} type="file" multiple className="hidden"
+            onChange={(e) => { setAttachments((a) => [...a, ...Array.from(e.target.files ?? [])]); if (fileRef.current) fileRef.current.value = ''; }} />
+          <button type="button" onClick={() => fileRef.current?.click()}
+            className="w-9 h-9 rounded-full glass flex items-center justify-center shrink-0 text-white/40 hover:text-white transition-all">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
           </button>
-        </div>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+            placeholder="Message…"
+            maxLength={500}
+            className="flex-1 glass rounded-2xl px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-green/60 transition-all"
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() && attachments.length === 0}
+            className="w-9 h-9 rounded-full bg-green flex items-center justify-center shrink-0 hover:bg-green-dim transition-all disabled:opacity-30 disabled:scale-95 active:scale-95"
+          >
+            <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+          </button>
+        </form>
       </div>
     </div>
   );
@@ -590,87 +689,165 @@ function FriendsTab({ friends, loading, onlineSet, onRefresh, onOpenProfile }: {
   onRefresh: () => void;
   onOpenProfile: (userId: string) => void;
 }) {
+  const [search, setSearch] = useState('');
+  const [sortMode, setSortMode] = useState<'online' | 'alpha'>('online');
+
   const accepted = friends.filter((f) => f.status === 'ACCEPTED');
-  const incoming = friends.filter((f) => f.status === 'PENDING' && !f.iRequested);
   const outgoing = friends.filter((f) => f.status === 'PENDING' && f.iRequested);
 
-  // Sort: online first, then alphabetical by handle
-  const sorted = [...accepted].sort((a, b) => {
-    const aOnline = onlineSet.has(a.userId) ? 0 : 1;
-    const bOnline = onlineSet.has(b.userId) ? 0 : 1;
-    if (aOnline !== bOnline) return aOnline - bOnline;
+  const filtered = accepted.filter((f) =>
+    !search || (f.handle ?? '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortMode === 'online') {
+      const aOnline = onlineSet.has(a.userId) ? 0 : 1;
+      const bOnline = onlineSet.has(b.userId) ? 0 : 1;
+      if (aOnline !== bOnline) return aOnline - bOnline;
+    }
     return (a.handle ?? '').localeCompare(b.handle ?? '');
   });
 
-  async function accept(id: string) { await fetch(`/api/friends/${id}`, { method: 'PATCH' }); onRefresh(); }
-  async function decline(id: string) { await fetch(`/api/friends/${id}`, { method: 'DELETE' }); onRefresh(); }
+  async function cancelRequest(id: string) { await fetch(`/api/friends/${id}`, { method: 'DELETE' }); onRefresh(); }
 
   if (loading) return <Spinner />;
 
   return (
-    <div className="relative h-full px-4 py-4 space-y-4">
-      {/* Incoming requests */}
-      {incoming.length > 0 && (
-        <section className="glass rounded-2xl p-4 space-y-3">
-          <Label>Requests <span className="text-white/60 ml-1">{incoming.length}</span></Label>
-          {incoming.map((f) => (
-            <div key={f.id} className="flex items-center gap-3">
+    <div className="relative h-full">
+      {/* ── Toolbar ── */}
+      <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.06] [background:rgb(var(--bg))]">
+        {/* Search input */}
+        <div className="flex-1 flex items-center gap-2 bg-white/[0.06] rounded-xl px-3 py-1.5 focus-within:bg-white/[0.09] transition-colors">
+          <svg className="w-3.5 h-3.5 text-white/25 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search…"
+            className="flex-1 bg-transparent text-sm text-white placeholder:text-white/25 focus:outline-none min-w-0"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="text-white/30 hover:text-white transition-colors text-xs leading-none shrink-0">✕</button>
+          )}
+        </div>
+
+        {/* Sort toggle */}
+        <button
+          onClick={() => setSortMode((s) => s === 'online' ? 'alpha' : 'online')}
+          title={sortMode === 'online' ? 'Sorted: online first' : 'Sorted: A–Z'}
+          className="w-8 h-8 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] flex items-center justify-center text-white/40 hover:text-white transition-all shrink-0"
+        >
+          {sortMode === 'online' ? (
+            /* online-first icon: dot with rays */
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none"/>
+            </svg>
+          ) : (
+            /* alpha icon: A→Z lines */
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 9l4-5 4 5M7 4v16M14 15l4 5 4-5M18 4v16"/>
+            </svg>
+          )}
+        </button>
+      </div>
+
+      <div className="px-4 pb-4 space-y-4">
+        {/* Empty state */}
+        {accepted.length === 0 && outgoing.length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+            <p className="text-white/30 text-sm">No friends yet.</p>
+            <p className="text-white/20 text-xs mt-1">Reveal during a match to connect.</p>
+          </div>
+        )}
+
+        {/* No search results */}
+        {search && sorted.length === 0 && accepted.length > 0 && (
+          <p className="text-white/25 text-sm text-center py-6">No friends match "{search}"</p>
+        )}
+
+        <div className="-mx-4 [&>:first-child]:border-t-transparent">
+          {sorted.map((f) => {
+            const isOnline = onlineSet.has(f.userId);
+            return (
+              <button key={f.id} onClick={() => onOpenProfile(f.userId)}
+                className="w-full flex items-center gap-3 px-4 py-3.5 border-t border-white/[0.06] hover:bg-white/[0.04] transition-all group text-left">
+                <div className="relative shrink-0">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${f.isVerifiedDev ? 'bg-green/15 border border-green/30 text-green' : 'bg-white/[0.08] border border-white/10 text-white/60'}`}>
+                    {f.handle ? f.handle[0].toUpperCase() : '?'}
+                  </div>
+                  {isOnline && (
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green border-2 border-[#0d0d0d]" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white/80">
+                    {f.handle ? `@${f.handle}` : 'Anonymous'}
+                    {f.isVerifiedDev && <span className="ml-1.5 text-[10px] text-green/70 font-mono">✓</span>}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${isOnline ? 'text-green/60' : 'text-white/25'}`}>
+                    {isOnline ? 'online' : 'offline'}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+
+          {outgoing.map((f) => (
+            <div key={f.id} className="flex items-center gap-3 opacity-50 px-4 py-2.5 border-t border-white/[0.06]">
               <Avatar handle={f.handle} v={f.isVerifiedDev} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white">{f.handle ? `@${f.handle}` : 'Anonymous'}</p>
-                {f.bio && <p className="text-xs text-white/40 truncate">{f.bio}</p>}
+                <p className="text-xs text-white/40 mt-0.5">Request pending</p>
+              </div>
+              <button onClick={() => cancelRequest(f.id)} className="text-xs text-white/30 hover:text-danger transition-colors px-1 shrink-0">Cancel</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Notifications tab ─────────────────────────────────────────────────────────
+
+function NotifsTab({ friends, onRefresh }: { friends: Friend[]; onRefresh: () => void }) {
+  const incoming = friends.filter((f) => f.status === 'PENDING' && !f.iRequested);
+
+  async function accept(id: string) { await fetch(`/api/friends/${id}`, { method: 'PATCH' }); onRefresh(); }
+  async function decline(id: string) { await fetch(`/api/friends/${id}`, { method: 'DELETE' }); onRefresh(); }
+
+  if (incoming.length === 0) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-center pointer-events-none">
+        <p className="text-white/30 text-sm">No notifications.</p>
+        <p className="text-white/20 text-xs mt-1">Friend requests and alerts show up here.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Section label */}
+      <div className="px-4 pt-3 pb-1">
+        <Label>Friend requests <span className="text-white/40 font-normal normal-case tracking-normal ml-1">{incoming.length}</span></Label>
+      </div>
+
+      <div className="[&>:first-child]:border-t-transparent">
+        {incoming.map((f) => (
+          <div key={f.id} className="border-t border-white/[0.06] hover:bg-white/[0.04] transition-all">
+            <div className="flex items-center gap-3 px-4 py-3.5">
+              <Avatar handle={f.handle} v={f.isVerifiedDev} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">{f.handle ? `@${f.handle}` : 'Anonymous'}</p>
+                <p className="text-xs text-white/35 mt-0.5">Wants to be friends</p>
               </div>
               <div className="flex gap-1.5 shrink-0">
                 <button onClick={() => decline(f.id)} className="px-2.5 py-1 rounded-lg text-xs text-white/50 hover:text-white hover:bg-white/10 transition-all">Decline</button>
                 <button onClick={() => accept(f.id)} className="px-2.5 py-1 rounded-lg text-xs bg-green text-white font-medium hover:bg-green-dim transition-all">Accept</button>
               </div>
             </div>
-          ))}
-        </section>
-      )}
-
-      {/* Empty state — centered in panel */}
-      {accepted.length === 0 && outgoing.length === 0 && incoming.length === 0 && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-          <p className="text-white/30 text-sm">No friends yet.</p>
-          <p className="text-white/20 text-xs mt-1">Reveal during a match to connect.</p>
-        </div>
-      )}
-
-      <div className="space-y-0.5">
-        {sorted.map((f) => {
-          const isOnline = onlineSet.has(f.userId);
-          return (
-            <button key={f.id} onClick={() => onOpenProfile(f.userId)}
-              className="w-full flex items-center gap-3 rounded-xl hover:bg-white/5 px-1 py-2.5 transition-all group text-left">
-              <div className="relative shrink-0">
-                <Avatar handle={f.handle} v={f.isVerifiedDev} />
-                {isOnline && (
-                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green border-2 border-[#0d0d0d]" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white group-hover:text-green transition-colors leading-tight">
-                  {f.handle ? `@${f.handle}` : 'Anonymous'}
-                  {f.isVerifiedDev && <span className="ml-1.5 text-[10px] text-green/70 font-mono">✓</span>}
-                </p>
-                <p className={`text-xs mt-0.5 ${isOnline ? 'text-green/70' : 'text-white/25'}`}>
-                  {isOnline ? 'online' : 'offline'}
-                </p>
-              </div>
-              <svg className="w-3.5 h-3.5 text-white/20 group-hover:text-white/50 transition-colors shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-            </button>
-          );
-        })}
-
-        {outgoing.map((f) => (
-          <div key={f.id} className="flex items-center gap-3 opacity-50 px-1 py-2.5">
-            <Avatar handle={f.handle} v={f.isVerifiedDev} />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white">{f.handle ? `@${f.handle}` : 'Anonymous'}</p>
-              <p className="text-xs text-white/40 mt-0.5">Request pending</p>
-            </div>
-            <button onClick={() => decline(f.id)} className="text-xs text-white/30 hover:text-danger transition-colors px-1 shrink-0">Cancel</button>
           </div>
         ))}
       </div>
@@ -683,58 +860,81 @@ function FriendsTab({ friends, loading, onlineSet, onRefresh, onOpenProfile }: {
 function MessagesTab({ friends, loading, onOpenConvo, onRefresh }: {
   friends: Friend[]; loading: boolean; onOpenConvo: (id: string) => void; onRefresh: () => void;
 }) {
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-
-  async function deleteThread(userId: string) {
-    await fetch(`/api/messages/${userId}`, { method: 'DELETE' });
-    setConfirmDeleteId(null);
-    onRefresh();
-  }
+  const [search, setSearch] = useState('');
+  const [sortMode, setSortMode] = useState<'recent' | 'alpha'>('recent');
 
   if (loading) return <Spinner />;
-  const sorted = [...friends].sort((a, b) => {
+
+  const byRecency = [...friends].sort((a, b) => {
     const ta = a.lastMessage ? new Date(a.lastMessage.createdAt).getTime() : 0;
     const tb = b.lastMessage ? new Date(b.lastMessage.createdAt).getTime() : 0;
     return tb - ta;
   });
-  return (
-    <div className="relative h-full px-4 py-4">
-      {sorted.length === 0
-        ? <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none"><p className="text-white/30 text-sm">No messages yet.</p><p className="text-white/20 text-xs mt-1">Reveal during a match to add friends.</p></div>
-        : <div className="divide-y divide-white/[0.06]">
-            {sorted.map((f) => {
-                const isConfirming = confirmDeleteId === f.userId;
-                return (
-                  <div key={f.id} className="flex items-center group">
-                    <button onClick={() => onOpenConvo(f.userId)} className="flex-1 flex items-center gap-3 px-4 py-3.5 hover:bg-white/[0.04] transition-all text-left min-w-0">
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${f.isVerifiedDev ? 'bg-green/15 border border-green/30 text-green' : 'bg-white/[0.08] border border-white/10 text-white/60'}`}>{f.handle ? f.handle[0].toUpperCase() : '?'}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className={`text-sm font-medium ${(f.unreadCount ?? 0) > 0 ? 'text-white' : 'text-white/80'}`}>{f.handle ? `@${f.handle}` : 'Anonymous'}</p>
-                          {f.lastMessage && <span className="text-[11px] text-white/25 shrink-0">{fmtTime(f.lastMessage.createdAt)}</span>}
-                        </div>
-                        {f.lastMessage ? <p className={`text-xs truncate ${(f.unreadCount ?? 0) > 0 ? 'text-white/60 font-medium' : 'text-white/35'}`}>{f.lastMessage.senderId !== f.userId ? 'You: ' : ''}{f.lastMessage.content}</p> : <p className="text-xs text-white/25">No messages yet</p>}
-                      </div>
-                      {(f.unreadCount ?? 0) > 0 && <span className="w-4 h-4 rounded-full bg-green text-white text-[9px] font-bold flex items-center justify-center shrink-0">{f.unreadCount}</span>}
-                    </button>
+  const filtered = byRecency.filter((f) =>
+    !search || (f.handle ?? '').toLowerCase().includes(search.toLowerCase())
+  );
+  const sorted = sortMode === 'recent'
+    ? filtered
+    : [...filtered].sort((a, b) => (a.handle ?? '').localeCompare(b.handle ?? ''));
 
-                    {/* Delete thread control */}
-                    <div className="pr-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {isConfirming ? (
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => setConfirmDeleteId(null)} className="text-[10px] text-white/40 hover:text-white transition-colors px-1.5 py-1">Cancel</button>
-                          <button onClick={() => deleteThread(f.userId)} className="text-[10px] text-danger hover:text-red-400 font-medium transition-colors px-1.5 py-1">Delete</button>
-                        </div>
-                      ) : (
-                        <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(f.userId); }}
-                          className="w-6 h-6 rounded-lg flex items-center justify-center text-white/25 hover:text-danger hover:bg-danger/10 transition-all">
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                        </button>
-                      )}
-                    </div>
+  return (
+    <div className="relative h-full">
+      {/* ── Toolbar ── */}
+      <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.06] [background:rgb(var(--bg))]">
+        <div className="flex-1 flex items-center gap-2 bg-white/[0.06] rounded-xl px-3 py-1.5 focus-within:bg-white/[0.09] transition-colors">
+          <svg className="w-3.5 h-3.5 text-white/25 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search…"
+            className="flex-1 bg-transparent text-sm text-white placeholder:text-white/25 focus:outline-none min-w-0"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="text-white/30 hover:text-white transition-colors text-xs leading-none shrink-0">✕</button>
+          )}
+        </div>
+        <button
+          onClick={() => setSortMode((s) => s === 'recent' ? 'alpha' : 'recent')}
+          title={sortMode === 'recent' ? 'Sorted: recent first' : 'Sorted: A–Z'}
+          className="w-8 h-8 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] flex items-center justify-center text-white/40 hover:text-white transition-all shrink-0"
+        >
+          {sortMode === 'recent' ? (
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+          ) : (
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 9l4-5 4 5M7 4v16M14 15l4 5 4-5M18 4v16"/>
+            </svg>
+          )}
+        </button>
+      </div>
+
+      {sorted.length === 0
+        ? <div className="flex flex-col items-center justify-center text-center pointer-events-none py-16"><p className="text-white/30 text-sm">{search ? `No results for "${search}"` : 'No messages yet.'}</p>{!search && <p className="text-white/20 text-xs mt-1">Reveal during a match to add friends.</p>}</div>
+        : <div className="[&>:first-child]:border-t-transparent">
+            {sorted.map((f) => (
+              <div key={f.id} className="border-t border-white/[0.06] hover:bg-white/[0.04] transition-all">
+                <button onClick={() => onOpenConvo(f.userId)} className="w-full flex items-center gap-3 px-4 py-3.5 text-left">
+                  {/* Avatar with unread dot */}
+                  <div className="relative shrink-0">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${f.isVerifiedDev ? 'bg-green/15 border border-green/30 text-green' : 'bg-white/[0.08] border border-white/10 text-white/60'}`}>{f.handle ? f.handle[0].toUpperCase() : '?'}</div>
+                    {(f.unreadCount ?? 0) > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green border-2 border-[#0d0d0d]" />
+                    )}
                   </div>
-                );
-              })}
+                  {/* Text — handle + preview */}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium truncate ${(f.unreadCount ?? 0) > 0 ? 'text-white' : 'text-white/80'}`}>{f.handle ? `@${f.handle}` : 'Anonymous'}</p>
+                    {f.lastMessage ? <p className={`text-xs mt-0.5 truncate ${(f.unreadCount ?? 0) > 0 ? 'text-white/60 font-medium' : 'text-white/35'}`}>{f.lastMessage.senderId !== f.userId ? 'You: ' : ''}{f.lastMessage.content}</p> : <p className="text-xs mt-0.5 text-white/25">No messages yet</p>}
+                  </div>
+                  {/* Timestamp — sibling of text div, centered by items-center */}
+                  <span className="text-[11px] text-white/25 shrink-0">{f.lastMessage ? fmtTime(f.lastMessage.createdAt) : ''}</span>
+                </button>
+              </div>
+            ))}
             </div>
       }
     </div>
@@ -742,6 +942,7 @@ function MessagesTab({ friends, loading, onOpenConvo, onRefresh }: {
 }
 
 // ── Profile tab ───────────────────────────────────────────────────────────────
+
 
 const inputCls = 'w-full bg-white/[0.06] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-green/60 transition-all';
 
@@ -781,7 +982,7 @@ function ProfileTab() {
   if (fetching) return <Spinner />;
 
   return (
-    <form onSubmit={handleSave} className="px-4 py-4 space-y-4">
+    <form onSubmit={handleSave} className="px-4 pt-2.5 pb-4 space-y-4">
       {/* Identity */}
       <section className="glass rounded-2xl p-4 space-y-4">
         <Label>Identity</Label>
