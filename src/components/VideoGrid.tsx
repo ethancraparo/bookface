@@ -1,30 +1,64 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 
-const ASPECT   = 16 / 9;
-const MIN_W    = 140;
-const MARGIN   = 12;
-const DEFAULT_W = 240;
+const ASPECT    = 16 / 9;
+const MIN_W     = 120;
+const MARGIN    = 10;
+const DEFAULT_W = 160;
 const DEFAULT_H = Math.round(DEFAULT_W / ASPECT);
 
 type Corner = 'tl' | 'tr' | 'bl' | 'br';
 
 interface Props {
-  localStream:    MediaStream | null;
-  remoteStream:   MediaStream | null;
-  isVideoOff:     boolean;
-  isAudioMuted:   boolean;
+  localStream:      MediaStream | null;
+  remoteStreams:    MediaStream[];
+  isVideoOff:       boolean;
+  isAudioMuted:     boolean;
   isScreenSharing?: boolean;
 }
 
-export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAudioMuted, isScreenSharing }: Props) {
+// ── Remote video tile — self-contained, tracks wide-screen state ─────────────
+
+function RemoteVideoTile({ stream }: { stream: MediaStream }) {
+  const ref     = useRef<HTMLVideoElement>(null);
+  const [isWide, setIsWide] = useState(false);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    ref.current.srcObject = stream;
+    const vid = ref.current;
+    const onMeta = () => {
+      if (vid.videoWidth && vid.videoHeight) setIsWide(vid.videoWidth / vid.videoHeight > 1.9);
+    };
+    vid.addEventListener('loadedmetadata', onMeta);
+    stream.getVideoTracks().forEach((t) => t.addEventListener('ended', () => setIsWide(false)));
+    return () => vid.removeEventListener('loadedmetadata', onMeta);
+  }, [stream]);
+
+  return (
+    <video
+      ref={ref}
+      autoPlay
+      playsInline
+      className={`w-full h-full ${isWide ? 'object-contain bg-black' : 'object-cover'}`}
+    />
+  );
+}
+
+// ── Main component ───────────────────────────────────────────────────────────
+
+export default function VideoGrid({
+  localStream,
+  remoteStreams,
+  isVideoOff,
+  isAudioMuted,
+  isScreenSharing,
+}: Props) {
   const localRef     = useRef<HTMLVideoElement>(null);
-  const remoteRef    = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [pipPos,  setPipPos]  = useState<{ x: number; y: number } | null>(null);
   const [pipSize, setPipSize] = useState({ w: DEFAULT_W, h: DEFAULT_H });
-  const [remoteIsWide, setRemoteIsWide] = useState(false);
 
   // Keep refs in sync so mouse handlers have fresh values without re-registering
   const pipPosRef  = useRef(pipPos);
@@ -33,36 +67,23 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
   pipSizeRef.current = pipSize;
 
   // Drag state
-  const isDragging  = useRef(false);
-  const dragOffset  = useRef({ x: 0, y: 0 });
+  const isDragging = useRef(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
 
   // Resize state
-  const isResizing    = useRef(false);
-  const resizeCorner  = useRef<Corner | null>(null);
-  const resizeStart   = useRef({ mouseX: 0, mouseY: 0, x: 0, y: 0, w: 0, h: 0 });
+  const isResizing   = useRef(false);
+  const resizeCorner = useRef<Corner | null>(null);
+  const resizeStart  = useRef({ mouseX: 0, mouseY: 0, x: 0, y: 0, w: 0, h: 0 });
 
   useEffect(() => {
     if (localRef.current && localStream) localRef.current.srcObject = localStream;
   }, [localStream]);
 
   useEffect(() => {
-    if (!remoteRef.current || !remoteStream) return;
-    remoteRef.current.srcObject = remoteStream;
-    const vid = remoteRef.current;
-    const onMeta = () => {
-      if (vid.videoWidth && vid.videoHeight) setRemoteIsWide(vid.videoWidth / vid.videoHeight > 1.9);
-    };
-    vid.addEventListener('loadedmetadata', onMeta);
-    remoteStream.getVideoTracks().forEach((t) => t.addEventListener('ended', () => setRemoteIsWide(false)));
-    return () => vid.removeEventListener('loadedmetadata', onMeta);
-  }, [remoteStream]);
-
-  useEffect(() => {
     function onMouseMove(e: MouseEvent) {
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      // — Drag —
       if (isDragging.current) {
         const { w, h } = pipSizeRef.current;
         setPipPos({
@@ -71,19 +92,18 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
         });
       }
 
-      // — Resize —
       if (isResizing.current && resizeCorner.current) {
-        const { mouseX, mouseY, x: sx, y: sy, w: sw, h: sh } = resizeStart.current;
+        const { mouseX, x: sx, y: sy, w: sw, h: sh } = resizeStart.current;
         const corner = resizeCorner.current;
-        const dx = e.clientX - mouseX;
-        const maxW = rect.width * 0.75;
+        const dx     = e.clientX - mouseX;
+        const maxW   = rect.width * 0.6;
 
         let newW: number, newX: number, newY: number;
 
         if (corner === 'br' || corner === 'tr') {
           newW = Math.max(MIN_W, Math.min(maxW, sw + dx));
           newX = sx;
-        } else { // bl | tl — dragging left shrinks/grows from right
+        } else {
           newW = Math.max(MIN_W, Math.min(maxW, sw - dx));
           newX = sx + sw - newW;
         }
@@ -91,12 +111,11 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
         const newH = newW / ASPECT;
 
         if (corner === 'br' || corner === 'bl') {
-          newY = sy;                  // top edge is fixed
-        } else {                      // tr | tl — bottom edge fixed
+          newY = sy;
+        } else {
           newY = sy + sh - newH;
         }
 
-        // Clamp inside container
         newX = Math.max(MARGIN, Math.min(rect.width  - newW - MARGIN, newX));
         newY = Math.max(MARGIN, Math.min(rect.height - newH - MARGIN, newY));
 
@@ -106,8 +125,8 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
     }
 
     function onMouseUp() {
-      isDragging.current  = false;
-      isResizing.current  = false;
+      isDragging.current   = false;
+      isResizing.current   = false;
       resizeCorner.current = null;
       document.body.style.cursor = '';
     }
@@ -140,12 +159,9 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
     isResizing.current   = true;
     resizeCorner.current = corner;
     resizeStart.current  = {
-      mouseX: e.clientX,
-      mouseY: e.clientY,
-      x:      pRect.left - cRect.left,
-      y:      pRect.top  - cRect.top,
-      w:      pRect.width,
-      h:      pRect.height,
+      mouseX: e.clientX, mouseY: e.clientY,
+      x: pRect.left - cRect.left, y: pRect.top - cRect.top,
+      w: pRect.width,              h: pRect.height,
     };
     setPipPos({ x: pRect.left - cRect.left, y: pRect.top - cRect.top });
     const cursors: Record<Corner, string> = { tl: 'nw-resize', tr: 'ne-resize', bl: 'sw-resize', br: 'se-resize' };
@@ -163,13 +179,13 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
     { corner: 'br', pos: 'bottom-0 right-0', cursor: 'cursor-se-resize' },
   ];
 
+  const remoteCount = remoteStreams.length;
+
   return (
     <div ref={containerRef} className="relative flex-1 bg-black rounded-xl overflow-hidden select-none">
-      {/* Remote video */}
-      {remoteStream ? (
-        <video ref={remoteRef} autoPlay playsInline
-          className={`w-full h-full ${remoteIsWide ? 'object-contain bg-black' : 'object-cover'}`} />
-      ) : (
+
+      {/* ── Remote video area ── */}
+      {remoteCount === 0 && (
         <div className="w-full h-full flex items-center justify-center bg-black">
           <div className="text-center space-y-3">
             <div className="w-16 h-16 rounded-full glass mx-auto flex items-center justify-center text-2xl">👤</div>
@@ -178,14 +194,40 @@ export default function VideoGrid({ localStream, remoteStream, isVideoOff, isAud
         </div>
       )}
 
-      {/* Local video — draggable + resizable PiP */}
+      {remoteCount === 1 && (
+        <div className="w-full h-full">
+          <RemoteVideoTile stream={remoteStreams[0]} />
+        </div>
+      )}
+
+      {remoteCount >= 2 && (
+        <div className="w-full h-full grid grid-cols-2 gap-0.5 bg-black/40">
+          {remoteStreams.map((stream, i) => (
+            <div
+              key={i}
+              className={`relative overflow-hidden bg-black ${
+                remoteCount === 3 && i === 2 ? 'col-span-2' : ''
+              }`}
+            >
+              <RemoteVideoTile stream={stream} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Local video — draggable + resizable PiP ── */}
       <div
         onMouseDown={handlePipMouseDown}
         style={pipStyle}
         className="absolute rounded-2xl overflow-hidden border border-white/20 shadow-glass bg-black cursor-grab active:cursor-grabbing"
       >
-        <video ref={localRef} autoPlay playsInline muted
-          className={`w-full h-full object-cover scale-x-[-1]${isVideoOff || !localStream ? ' hidden' : ''}`} />
+        <video
+          ref={localRef}
+          autoPlay
+          playsInline
+          muted
+          className={`w-full h-full object-cover scale-x-[-1]${isVideoOff || !localStream ? ' hidden' : ''}`}
+        />
 
         {(isVideoOff || !localStream) && (
           <div className="absolute inset-0 flex items-center justify-center bg-elevated">

@@ -10,9 +10,12 @@ interface Props {
   onSkip: () => void;
   onReveal: () => void;
   onReport: () => void;
+  onExpand: () => void;
   revealPending: boolean;
   revealedIdentity: boolean;
   sessionActive: boolean;
+  groupSize: number;
+  expandPending: boolean;
 }
 
 export default function Controls({
@@ -25,10 +28,15 @@ export default function Controls({
   onSkip,
   onReveal,
   onReport,
+  onExpand,
   revealPending,
   revealedIdentity,
   sessionActive,
+  groupSize,
+  expandPending,
 }: Props) {
+  const isGroup = groupSize > 2;
+
   return (
     <div className="flex items-center justify-between gap-2 px-3 py-2.5 glass rounded-2xl shadow-glass inset-highlight">
       {/* Left: Skip */}
@@ -65,36 +73,58 @@ export default function Controls({
         />
       </div>
 
-      {/* Right: Reveal + Report */}
+      {/* Right: Expand + Reveal + Report */}
       <div className="flex items-center gap-1.5">
-        {sessionActive && !revealedIdentity && (
+        {/* Add person — only show when session active and room not full */}
+        {sessionActive && groupSize < 4 && (
           <button
-            onClick={onReveal}
-            disabled={revealPending}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium transition-all ${
-              revealPending
-                ? 'bg-blue/20 border border-blue/40 text-blue animate-pulse-slow'
+            onClick={onExpand}
+            disabled={expandPending}
+            title={expandPending ? 'waiting for others…' : 'add someone new'}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+              expandPending
+                ? 'bg-green/20 border border-green/40 text-green animate-pulse-slow'
                 : 'text-white/60 hover:text-white hover:bg-white/10'
             }`}
           >
-            <LinkIcon />
-            {revealPending ? 'pending…' : 'reveal'}
+            <AddPersonIcon />
+            {expandPending ? 'waiting…' : '+1'}
           </button>
         )}
-        {revealedIdentity && (
-          <span className="flex items-center gap-1 px-3 py-2 text-sm text-green font-medium">
-            <CheckIcon />
-            connected
-          </span>
-        )}
-        {sessionActive && (
-          <button
-            onClick={onReport}
-            title="report user"
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-white/40 hover:text-danger hover:bg-danger/10 transition-all"
-          >
-            <FlagIcon />
-          </button>
+
+        {/* Reveal + Report only in 1-on-1 */}
+        {!isGroup && (
+          <>
+            {sessionActive && !revealedIdentity && (
+              <button
+                onClick={onReveal}
+                disabled={revealPending}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium transition-all ${
+                  revealPending
+                    ? 'bg-blue/20 border border-blue/40 text-blue animate-pulse-slow'
+                    : 'text-white/60 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <LinkIcon />
+                {revealPending ? 'pending…' : 'reveal'}
+              </button>
+            )}
+            {revealedIdentity && (
+              <span className="flex items-center gap-1 px-3 py-2 text-sm text-green font-medium">
+                <CheckIcon />
+                connected
+              </span>
+            )}
+            {sessionActive && (
+              <button
+                onClick={onReport}
+                title="report user"
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-white/40 hover:text-danger hover:bg-danger/10 transition-all"
+              >
+                <FlagIcon />
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -186,6 +216,13 @@ function FlagIcon() {
   return (
     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+    </svg>
+  );
+}
+function AddPersonIcon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>
     </svg>
   );
 }
