@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <head>
         {/* Apply theme before first paint to prevent flash */}
         <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('bf-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();` }} />
