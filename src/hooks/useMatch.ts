@@ -103,6 +103,18 @@ export function useMatch({ userId }: UseMatchOptions) {
 
   // ── Reset session state ──────────────────────────────────────────────────
 
+  function stopMedia() {
+    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    localStreamRef.current = null;
+    screenStreamRef.current?.getTracks().forEach((t) => t.stop());
+    screenStreamRef.current = null;
+    setLocalStream(null);
+    setIsVideoOff(false);
+    setIsAudioMuted(false);
+    setIsScreenSharing(false);
+    isScreenSharingRef.current = false;
+  }
+
   function resetSession() {
     closePeerConnection();
     setMessages([]);
@@ -198,7 +210,9 @@ export function useMatch({ userId }: UseMatchOptions) {
     return () => {
       socket.disconnect();
       closePeerConnection();
+      // Stop all tracks on unmount (e.g. navigating away mid-session)
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      screenStreamRef.current?.getTracks().forEach((t) => t.stop());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
@@ -230,7 +244,9 @@ export function useMatch({ userId }: UseMatchOptions) {
     socketRef.current?.emit('leave_queue');
     socketRef.current?.emit('skip');
     resetSession();
+    stopMedia();
     setSessionState('idle');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const sendMessage = useCallback((text: string) => {
