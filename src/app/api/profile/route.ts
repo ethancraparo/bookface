@@ -52,6 +52,22 @@ export async function PUT(req: NextRequest) {
   if (!/^[a-zA-Z0-9_]+$/.test(handle)) {
     return NextResponse.json({ error: 'Handle can only contain letters, numbers, and underscores' }, { status: 400 });
   }
+  if (bio && bio.length > 300) {
+    return NextResponse.json({ error: 'Bio must be 300 characters or less' }, { status: 400 });
+  }
+
+  const isValidUrl = (url: string) => {
+    try { const u = new URL(url); return u.protocol === 'https:' || u.protocol === 'http:'; }
+    catch { return false; }
+  };
+  if (githubUrl  && !isValidUrl(githubUrl))  return NextResponse.json({ error: 'Invalid GitHub URL'  }, { status: 400 });
+  if (twitterUrl && !isValidUrl(twitterUrl)) return NextResponse.json({ error: 'Invalid Twitter URL' }, { status: 400 });
+  if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+    return NextResponse.json({ error: 'Invalid contact email' }, { status: 400 });
+  }
+  if (!Array.isArray(tags) || tags.length > 10 || tags.some((t: unknown) => typeof t !== 'string' || (t as string).length > 30)) {
+    return NextResponse.json({ error: 'Invalid tags' }, { status: 400 });
+  }
 
   const taken = await prisma.user.findFirst({
     where: { handle, NOT: { id: session.user.id } },

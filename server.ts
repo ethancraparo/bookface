@@ -2,6 +2,7 @@ import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 import next from 'next';
 import { PrismaClient } from '@prisma/client';
+import { getToken } from 'next-auth/jwt';
 import { onlineUsers } from './src/lib/presence';
 
 const prisma = new PrismaClient();
@@ -81,16 +82,26 @@ app.prepare().then(() => {
   const httpServer = createServer(handler);
 
   const io = new SocketServer(httpServer, {
-    cors: { origin: '*' },
+    cors: {
+      origin: process.env.NEXTAUTH_URL ?? 'http://localhost:3000',
+      credentials: true,
+    },
   });
 
-  io.on('connection', (socket) => {
-    let currentUserId: string | null = null;
+  io.on('connection', async (socket) => {
+    // Verify the NextAuth session from the cookie — never trust client-provided userId
+    const authToken = await getToken({
+      req:          socket.request as Parameters<typeof getToken>[0]['req'],
+      secret:       process.env.NEXTAUTH_SECRET!,
+      secureCookie: process.env.NODE_ENV === 'production',
+    });
+    if (!authToken?.id) { socket.disconnect(true); return; }
+    const currentUserId: string = authToken.id as string;
 
     // ── Queue ──────────────────────────────────────────────────────────────
 
-    socket.on('join_queue', async ({ userId, tags }: { userId: string; tags: string[] }) => {
-      currentUserId = userId;
+    socket.on('join_queue', async ({ tags }: { tags: string[] }) => {
+      const userId = currentUserId;
 
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) { socket.emit('error', { message: 'User not found' }); return; }
@@ -163,6 +174,7 @@ app.prepare().then(() => {
     socket.on('chat_message', ({ message }: { message: string }) => {
       const session = activeSessions.get(socket.id);
       if (!session || !message?.trim()) return;
+      if (message.length > 1000) return;
       io.to(session.partnerSocketId).emit('chat_message', {
         text: message.trim(),
         timestamp: Date.now(),
@@ -315,17 +327,26 @@ app.prepare().then(() => {
   const dmUserSockets = new Map<string, string>(); // userId → socketId
   const dm = io.of('/dm');
 
-  dm.on('connection', (socket) => {
-    let registeredUserId: string | null = null;
+  dm.on('connection', async (socket) => {
+    // Verify session from cookie — never trust client-provided userId
+    const authToken = await getToken({
+      req:          socket.request as Parameters<typeof getToken>[0]['req'],
+      secret:       process.env.NEXTAUTH_SECRET!,
+      secureCookie: process.env.NODE_ENV === 'production',
+    });
+    if (!authToken?.id) { socket.disconnect(true); return; }
+    const registeredUserId: string = authToken.id as string;
 
-    socket.on('register', (userId: string) => {
-      registeredUserId = userId;
-      dmUserSockets.set(userId, socket.id);
-      onlineUsers.add(userId);
+    dmUserSockets.set(registeredUserId, socket.id);
+    onlineUsers.add(registeredUserId);
+
+    socket.on('register', () => {
+      // userId now comes from the verified auth token — client value ignored
     });
 
     socket.on('send_message', async ({ toUserId, content }: { toUserId: string; content: string }) => {
-      if (!registeredUserId || !content?.trim()) return;
+      if (!content?.trim()) return;
+      if (content.length > 2000) return;
 
       // Verify friendship
       const friendship = await prisma.friendship.findFirst({
@@ -370,10 +391,8 @@ app.prepare().then(() => {
     });
 
     socket.on('disconnect', () => {
-      if (registeredUserId) {
-        dmUserSockets.delete(registeredUserId);
-        onlineUsers.delete(registeredUserId);
-      }
+      dmUserSockets.delete(registeredUserId);
+      onlineUsers.delete(registeredUserId);
     });
   });
 
